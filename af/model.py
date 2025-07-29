@@ -49,7 +49,10 @@ def crop_sizes(input_dict, old_dim, array_slice, verbose=False):
           # print(f'input_dict {k}, {kk} shape: {input_dict[k][kk].shape}')
           # if kk == 'crop':
           #   continue
-          indices_to_change = [x for x, y in enumerate(input_dict[k][kk].shape) if y == old_dim]
+          try:
+            indices_to_change = [x for x, y in enumerate(input_dict[k][kk].shape) if y == old_dim]
+          except Exception as e:
+            print('in crop_sizes, error',e,k,kk,input_dict[k][kk])
           # print('in input_dict subdict indices',indices_to_change)
           if len(indices_to_change) == 0:
             # print('in input_dict subdict nothing to change')
@@ -171,8 +174,8 @@ class mk_af_model(design_model, _af_inputs, _af_loss, _af_prep, _af_design, _af_
                 "template": {"rm_ic":False},                
                 "weights":  {"seq_ent":0.0, "plddt":0.0, "pae":0.0, "exp_res":0.0, "helix":0.0},
                 "fape_cutoff":10.0,
-                "crop":False}
-    print('in model init, opt before', self.opt['crop'])
+                "crop":False, "final":False}
+    # print('in model init, opt before', self.opt['crop'])
 
     self._params = {}
     self._inputs = {}
@@ -186,7 +189,7 @@ class mk_af_model(design_model, _af_inputs, _af_loss, _af_prep, _af_design, _af_
     for k in keys:
       if k in self._args: self._args[k] = kwargs.pop(k)
       if k in self.opt: self.opt[k] = kwargs.pop(k)
-    print('in model init, opt after', self.opt['crop'])
+    # print('in model init, opt after', self.opt['crop'])
 
     # collect callbacks
     self._callbacks = {"model": {"pre": kwargs.pop("pre_callback",None),
@@ -216,9 +219,10 @@ class mk_af_model(design_model, _af_inputs, _af_loss, _af_prep, _af_design, _af_
       self.opt["pssm_hard"] = True
     else:
       self._cfg = config.model_config("model_1_ptm" if self._args["use_templates"] else "model_3_ptm")
-    print('get crop from config before init,',self._cfg.model.embeddings_and_evoformer.crop)
+    # print('get crop from config before init,',self._cfg.model.embeddings_and_evoformer.crop)
     self._cfg.model.embeddings_and_evoformer.crop = self.opt["crop"]
-    print('get crop from config after init,',self._cfg.model.embeddings_and_evoformer.crop)
+    self._cfg.model.embeddings_and_evoformer.final = self.opt["final"]
+    # print('get crop from config after init,',self._cfg.model.embeddings_and_evoformer.crop)
     
     if self._args["recycle_mode"] in ["average","first","last","sample"]:
       num_recycles = 0
@@ -259,7 +263,8 @@ class mk_af_model(design_model, _af_inputs, _af_loss, _af_prep, _af_design, _af_
     self._get_loss   = [self._loss_fixbb, self._loss_hallucination, self._loss_binder, self._loss_partial][idx]
 
   def _get_model(self, cfg, callback=None):
-    print('in beginning _get_model')
+    # print('in beginning _get_model')
+    # print('in beginning',self._cfg.model.embeddings_and_evoformer.final)
     a = self._args
     runner = model.RunModel(cfg,
                             recycle_mode=a["recycle_mode"],
@@ -267,13 +272,19 @@ class mk_af_model(design_model, _af_inputs, _af_loss, _af_prep, _af_design, _af_
 
     # setup function to get gradients
     def _model(params, model_params, inputs, key):
-      print('starting model')
+      # print('starting model',self.protocol)
       inputs["params"] = params
       opt = inputs["opt"]
-      print('in beginning _model opt, crop', opt['crop'])
-      print('in beginning _model cfg, crop', cfg.model.embeddings_and_evoformer.crop)
+      # print('in beginning _model opt, crop', opt['crop'])
+      # print('in beginning _model opt, final', opt['final'])
+      # print('in beginning _model cfg, crop', cfg.model.embeddings_and_evoformer.crop)
+      # print('in beginning _model cfg, final', cfg.model.embeddings_and_evoformer.final)
       self.opt['crop'] = cfg.model.embeddings_and_evoformer.crop
-      print('in beginning _model self.opt, crop', self.opt['crop'])
+      self.opt['final'] = cfg.model.embeddings_and_evoformer.final
+      if self.opt['crop']:
+        # print('in model, updating hotspots in beginning', self.opt['hotspot'],type(self.opt['hotspot']))
+        self.opt['hotspot'] = np.array([128,137,149]) #[1,3,5]
+      # print('in beginning _model self.opt, crop', self.opt['crop'])
       aux = {}
       key = Key(key=key).get
 
@@ -282,9 +293,9 @@ class mk_af_model(design_model, _af_inputs, _af_loss, _af_prep, _af_design, _af_
       #######################################################################
       # get sequence
       seq = self._get_seq(inputs, aux, key())
-      if not cfg.model.embeddings_and_evoformer.crop:
-        print('in model, not cropping, finished _get_seq')
-        print('after _get_seq seq["pseudo"]', seq["pseudo"].shape)
+      # if not cfg.model.embeddings_and_evoformer.crop:
+      #   print('in model, not cropping, finished _get_seq')
+      #   print('after _get_seq seq["pseudo"]', seq["pseudo"].shape)
       # update sequence features      
       pssm = jnp.where(opt["pssm_hard"], seq["hard"], seq["pseudo"])
       if a["use_mlm"]:
@@ -292,6 +303,15 @@ class mk_af_model(design_model, _af_inputs, _af_loss, _af_prep, _af_design, _af_
         mlm = jax.random.bernoulli(key(),opt["mlm_dropout"],shape)
         update_seq(seq["pseudo"], inputs, seq_pssm=pssm, mlm=mlm)
       else:
+        # print('in model, not using mlm, seq["pseudo"]', seq["pseudo"].shape)
+        # print('in model, final?',self._cfg.model.embeddings_and_evoformer.final)
+        if inputs['msa_feat'].shape[1] > seq["pseudo"].shape[1]: #or self._cfg.model.embeddings_and_evoformer.final:
+          # print('in model, cropping inputs BEFORE', inputs['msa_feat'].shape, seq["pseudo"].shape)
+          jax_array_slice = jnp.concatenate([jnp.arange(0,3),jnp.arange(12,24),jnp.arange(37,56),jnp.arange(61,70),jnp.arange(86,123),jnp.arange(124,143),jnp.arange(146,150),jnp.arange(151,154),jnp.arange(165,175),jnp.arange(184,237),jnp.arange(258,270),jnp.arange(289,291),jnp.arange(292,294),jnp.arange(296,298),jnp.arange(312,361),jnp.arange(371,376),jnp.arange(422,442),jnp.arange(454,468),jnp.arange(494,inputs['msa_feat'].shape[1])], axis=0)
+          # jax_array_slice = jnp.concatenate([jnp.arange(35,50),jnp.arange(92,111),jnp.arange(115,inputs['msa_feat'].shape[1])], axis=0)
+          inputs = crop_sizes(inputs, inputs['msa_feat'].shape[1], jax_array_slice)
+          self._cfg.model.embeddings_and_evoformer.crop = False
+          self._cfg.model.embeddings_and_evoformer.final = False
         update_seq(seq["pseudo"], inputs, seq_pssm=pssm)
       
       # update amino acid sidechain identity
@@ -304,7 +324,13 @@ class mk_af_model(design_model, _af_inputs, _af_loss, _af_prep, _af_design, _af_
 
       # update template features
       inputs["mask_template_interchain"] = opt["template"]["rm_ic"]
+      if self._cfg.model.embeddings_and_evoformer.crop:
+        # print('setting initial guess', inputs['rm_template'].shape)
+        inputs['rm_template'].at[:494].set(False) #115
+        inputs['rm_template_seq'].at[:494].set(False) #115
+        inputs['rm_template_sc'].at[:494].set(False) #115
       if a["use_templates"]:
+        # print('in model, using templates and updating now')
         self._update_template(inputs, key())
       
       # set dropout
@@ -319,21 +345,21 @@ class mk_af_model(design_model, _af_inputs, _af_loss, _af_prep, _af_design, _af_
                    "seq":seq, "key":key(), "params":params}
         sub_args = {k:fn_args.get(k,None) for k in signature(fn).parameters}
         fn(**sub_args)
-      print('in model, before runner.apply, seq', seq['pseudo'].shape)
-      print('in model, before runner.apply, inputs["msa_mask"]', inputs['msa_mask'].shape)
-      print('in model, before runner.apply',runner)
+      # print('in model, before runner.apply, seq', seq['pseudo'].shape)
+      # print('in model, before runner.apply, inputs["msa_mask"]', inputs['msa_mask'].shape)
+      # print('in model, before runner.apply',runner)
       #######################################################################
       # OUTPUTS
       #######################################################################
-      if not cfg.model.embeddings_and_evoformer.crop:
-        print('in model, not cropping')
-        print('inputs',inputs)
-        print('model_params',model_params)
+      # if not cfg.model.embeddings_and_evoformer.crop:
+      #   print('in model, not cropping')
+      #   # print('inputs',inputs)
+      #   # print('model_params',model_params)
       # inputs = {k: v for k, v in inputs.items() if k not in ['seq', 'seq_pseudo']}
       start_time = time.time()
       outputs = runner.apply(model_params, key(), inputs)
       end_time = time.time()
-      print('in model, runner.apply time', end_time - start_time)
+      # print('in model, runner.apply time', end_time - start_time)
       
       # print('in model, outputs', outputs["structure_module"]["final_atom_positions"].shape)
       # print('in model, outputs', outputs["structure_module"]["final_atom_mask"].shape)
@@ -341,22 +367,26 @@ class mk_af_model(design_model, _af_inputs, _af_loss, _af_prep, _af_design, _af_
       
       start_time = time.time()
       if self._cfg.model.embeddings_and_evoformer.crop:
-        print('cropping in model')
-        array_slice = jnp.concatenate([jnp.arange(35,50),jnp.arange(115,inputs['seq_mask'].shape[0])], axis=0)
+        # print('cropping in model')
+        array_slice = jnp.concatenate([jnp.arange(0,3),jnp.arange(12,24),jnp.arange(37,56),jnp.arange(61,70),jnp.arange(86,123),jnp.arange(124,143),jnp.arange(146,150),jnp.arange(151,154),jnp.arange(165,175),jnp.arange(184,237),jnp.arange(258,270),jnp.arange(289,291),jnp.arange(292,294),jnp.arange(296,298),jnp.arange(312,361),jnp.arange(371,376),jnp.arange(422,442),jnp.arange(454,468),jnp.arange(494,inputs['seq_mask'].shape[0])], axis=0)
+        # array_slice = jnp.concatenate([jnp.arange(35,50),jnp.arange(92,111),jnp.arange(115,inputs['seq_mask'].shape[0])], axis=0)
         # print('input binder size',jnp.arange(488,inputs['seq_mask'].shape[0]).shape)
         
         # array_slice = jnp.concatenate([jnp.arange(0,3),jnp.arange(12,24),jnp.arange(37,56),jnp.arange(61,70),jnp.arange(86,123),jnp.arange(124,143),jnp.arange(146,150),jnp.arange(151,154),jnp.arange(165,175),jnp.arange(184,237),jnp.arange(258,270),jnp.arange(289,291),jnp.arange(292,294),jnp.arange(296,298),jnp.arange(312,361),jnp.arange(371,376),jnp.arange(422,436),jnp.arange(448,462),jnp.arange(488,inputs['seq_mask'].shape[0])], axis=0)
-        # print('input target size',array_slice.shape)
+        # print('array_slice shape',array_slice.shape)
+        # print('original shape',inputs['seq_mask'].shape)
         inputs = crop_sizes(inputs, inputs['seq_mask'].shape[0], array_slice)
         # print('after inputs cropping', inputs['msa_feat'].shape)
         # print('after inputs cropping', inputs['seq_mask'].shape)
         # print('after inputs cropping output predicted_aligned_error', outputs['predicted_aligned_error'].keys())
-        self._target_len = 15 #269
-        self._lengths = [15, self._lengths[1]] #269
+        self._target_len = 275 #34 #269
+        self._lengths = [275, self._lengths[1]] #269 #34
+        # print('in model, updating hotspots', self.opt['hotspot'])
+        self.opt['hotspot'] = np.array([128,137,149]) #[1,3,5]
         # inputs = {k: v for k, v in inputs.items() if k not in ['seq', 'seq_pseudo']}
       # add aux outputs
       end_time = time.time()
-      print('in model, cropping time', end_time - start_time)
+      # print('in model, cropping time', end_time - start_time)
       start_time = time.time()
       aux.update({"atom_positions": outputs["structure_module"]["final_atom_positions"],
                   "atom_mask":      outputs["structure_module"]["final_atom_mask"],                  
@@ -370,7 +400,7 @@ class mk_af_model(design_model, _af_inputs, _af_loss, _af_prep, _af_design, _af_
                   "i_cmap":         get_contact_map(outputs, opt["i_con"]["cutoff"]),
                   "prev":           outputs["prev"]})
       end_time = time.time()
-      print('in model, aux update time', end_time - start_time)
+      # print('in model, aux update time', end_time - start_time)
       #######################################################################
       # LOSS
       #######################################################################
@@ -379,21 +409,21 @@ class mk_af_model(design_model, _af_inputs, _af_loss, _af_prep, _af_design, _af_
       start_time = time.time()
       # add protocol specific losses
       if inputs['seq_mask'].shape[0] == outputs['structure_module']['final_atom_positions'].shape[0]:
-        print('losses can compute, same shape inputs and outputs')
+        # print('losses can compute, same shape inputs and outputs')
         self._get_loss(inputs=inputs, outputs=outputs, aux=aux)
-      else:
-        print('in model, inputs and outputs have different lengths')
-        print('inputs', inputs['seq_mask'].shape)
-        print('outputs', outputs['structure_module']['final_atom_positions'].shape)
+      # else:
+      #   print('in model, inputs and outputs have different lengths')
+      #   print('inputs', inputs['seq_mask'].shape)
+      #   print('outputs', outputs['structure_module']['final_atom_positions'].shape)
       end_time = time.time()
-      print('in model, loss time', end_time - start_time)
+      # print('in model, loss time', end_time - start_time)
       # # sequence entropy loss
       # aux["losses"].update(get_seq_ent_loss(inputs))
       
       start_time = time.time()
       # experimental masked-language-modeling
       if a["use_mlm"]:
-        print('in model, using mlm')
+        # print('in model, using mlm')
         aux["mlm"] = outputs["masked_msa"]["logits"]
         mask = jnp.where(inputs["seq_mask"],mlm,0)
         aux["losses"].update(get_mlm_loss(outputs, mask=mask, truth=seq["pssm"]))
@@ -414,7 +444,7 @@ class mk_af_model(design_model, _af_inputs, _af_loss, _af_prep, _af_design, _af_
       w = opt["weights"]
       loss = sum([v * w[k] if k in w else v for k,v in aux["losses"].items()])
       end_time = time.time()
-      print('in model, rest of time time', end_time - start_time)
+      # print('in model, rest of time time', end_time - start_time)
       return loss, aux
     
     return {"grad_fn":jax.jit(jax.value_and_grad(_model, has_aux=True, argnums=0)),

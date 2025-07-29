@@ -40,9 +40,12 @@ class _af_loss:
     tL,bL = self._target_len, self._binder_len
     binder_id = zeros.at[-bL:].set(mask[-bL:])
     if "hotspot" in opt:
+      # print('in loss_binder, opt["hotspot"]',opt["hotspot"])
+      # jax.debug.print("in loss_binder, opt['hotspot']: {}",opt["hotspot"])
       target_id = zeros.at[opt["hotspot"]].set(mask[opt["hotspot"]])
       i_con_loss = get_con_loss(inputs, outputs, opt["i_con"], mask_1d=target_id, mask_1b=binder_id)
     else:
+      # print('in loss_binder, no hotspot')
       target_id = zeros.at[:tL].set(mask[:tL])
       i_con_loss = get_con_loss(inputs, outputs, opt["i_con"], mask_1d=binder_id, mask_1b=target_id)
 
@@ -204,8 +207,8 @@ def get_pae(outputs):
 def get_ptm(inputs, outputs, interface=False):
   pae = {"residue_weights":inputs["seq_mask"],
          **outputs["predicted_aligned_error"]}
-  print('in get_ptm, inputs["seq_mask"]',inputs["seq_mask"].shape)
-  print('in get_ptm, outputs["predicted_aligned_error"]',outputs["predicted_aligned_error"]['logits'].shape)
+  # print('in get_ptm, inputs["seq_mask"]',inputs["seq_mask"].shape)
+  # print('in get_ptm, outputs["predicted_aligned_error"]',outputs["predicted_aligned_error"]['logits'].shape)
   if interface:
     if "asym_id" not in pae:
       pae["asym_id"] = inputs["asym_id"]
@@ -258,6 +261,8 @@ def get_pae_loss(outputs, mask_1d=None, mask_1b=None, mask_2d=None):
   if mask_1b is None: mask_1b = jnp.ones(L)
   if mask_2d is None: mask_2d = jnp.ones((L,L))
   mask_2d = mask_2d * mask_1d[:,None] * mask_1b[None,:]
+  # jax.debug.print("in get_pae_loss, p: {}", p)
+  # jax.debug.print("in get_pae_loss, mask_2d: {}", mask_2d)
   return mask_loss(p, mask_2d)
 
 def get_con_loss(inputs, outputs, con_opt,

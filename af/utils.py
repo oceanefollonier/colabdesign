@@ -67,19 +67,25 @@ class _af_utils:
     - set get_best=False, to get the last sampled sequence
     '''
     if aux is None:
-      print('in save_pdb, aux is None')
+      # print('in save_pdb, aux is None')
       aux = self._tmp["best"]["aux"] if (get_best and "aux" in self._tmp["best"]) else self.aux
     aux = aux["all"]
     
     p = {k:aux[k] for k in ["aatype","residue_index","atom_positions","atom_mask"]}
     p["b_factors"] = 100 * p["atom_mask"] * aux["plddt"][...,None]
-    print('in save_pdb, p["atom_positions"]', p["atom_positions"].shape)
-    print('in save_pdb, p["atom_mask"]', p["atom_mask"].shape)
+    # if not self._cfg.model.embeddings_and_evoformer.crop:
+    #   print('in save_pdb, p["atom_positions"]', p["atom_positions"].shape, p["atom_positions"])
+    #   print('in save_pdb, p["atom_mask"]', p["atom_mask"].shape, p["atom_mask"])
+
+    # print('in save_pdb, p["atom_mask"]', p["atom_mask"].shape)
+    # print('in save_pdb, p["atom_positions"]', p["atom_positions"].shape)
+
 
     def to_pdb_str(x, n=None):
       p_str = protein.to_pdb(protein.Protein(**x))
       p_str = "\n".join(p_str.splitlines()[1:-2])
-      print('in save to_pdb_str, lengths', self._lengths)
+      # print('in save to_pdb_str, lengths', self._lengths)
+      # self._lengths = [34, self._lengths[1]]
       if renum_pdb: p_str = renum_pdb_str(p_str, self._lengths)
       if n is not None:
         p_str = f"MODEL{n:8}\n{p_str}\nENDMDL\n"

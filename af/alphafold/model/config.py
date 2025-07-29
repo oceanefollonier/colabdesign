@@ -239,6 +239,7 @@ CONFIG = ml_collections.ConfigDict({
             'backprop_dgram_temp': 1.0,
             'seq_channel': 384,
             'crop': False,
+            'final': False,
             'template': {
                 'attention': {
                     'gating': False,
@@ -477,6 +478,7 @@ CONFIG_MULTIMER = ml_collections.ConfigDict({
             'recycle_features': True,
             'recycle_pos': True,
             'crop': False,
+            'final': False,
             'template': {
                 'attention': {
                     'gating': False,

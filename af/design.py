@@ -94,13 +94,16 @@ class _af_design:
     for n in model_nums:
       p = self._model_params[n]
       auxs.append(self._recycle(p, num_recycles=num_recycles, backprop=backprop))
-      print('in design num_recycles', num_recycles, 'model_num', n)
+    #   print('in design num_recycles', num_recycles, 'model_num', n)
+    # print('in design, nb auxs',len(auxs))
+    # print('in design, auxs',auxs[-1]['pae'].shape)
+    # np.save('/scicore/home/schwede/follon0000/BindCraft/example/PDL1_notcropped_predict/auxs_pae_before.npy', auxs[-1]['pae'])
     auxs = jax.tree_util.tree_map(lambda *x: np.stack(x), *auxs)
-    if not self.opt['crop']:
-      print('in design, debugging')
-      jax.debug.print('auxs: {}',auxs['atom_positions'].shape)  
-    else:
-      print('in design, opt crop is true')
+    # if not self.opt['crop']:
+    #   print('in design, debugging')
+    #   jax.debug.print('auxs: {}',auxs['atom_positions'].shape)  
+    # else:
+    #   print('in design, opt crop is true')
 
     # update aux (average outputs)
     def avg_or_first(x):
@@ -108,12 +111,14 @@ class _af_design:
       else: return x.mean(0)
 
     self.aux = jax.tree_util.tree_map(avg_or_first, auxs)
-    print('in design, aux shape', self.aux["atom_positions"][0].shape)
-    if hasattr(self._tmp,"best"):
-      if hasattr(self._tmp["best"],"aux"):
-        print('in design, best aux shape', self._tmp["best"]["aux"]["atom_positions"][0].shape)
-      else:
-        print('in design, no best aux', self._tmp["best"].keys())
+    # print('in design, aux shape', self.aux["atom_positions"][0].shape)
+    # print('in design, saving aux outputs pae',auxs['pae'].shape)
+    # np.save('/scicore/home/schwede/follon0000/BindCraft/example/PDL1_notcropped_predict/auxs_pae.npy', auxs['pae'])
+    # if hasattr(self._tmp,"best"):
+    #   if hasattr(self._tmp["best"],"aux"):
+    #     print('in design, best aux shape', self._tmp["best"]["aux"]["atom_positions"][0].shape)
+    #   else:
+    #     print('in design, no best aux', self._tmp["best"].keys())
     self.aux["atom_positions"] = auxs["atom_positions"][0]
     self.aux["all"] = auxs
     
@@ -156,14 +161,14 @@ class _af_design:
     self._inputs["opt"] = self.opt
     flags  = [self._params, model_params, self._inputs, self.key()]
     if backprop:
-      print('running _single with backprop')
+      # print('running _single with backprop')
       (loss, aux), grad = self._model["grad_fn"](*flags)
     else:
-      print('running _single without backprop')
+      # print('running _single without backprop')
       loss, aux = self._model["fn"](*flags)
       grad = jax.tree_util.tree_map(np.zeros_like, self._params)
     aux.update({"loss":loss,"grad":grad})
-    print('in _single, aux losses', aux['losses'])
+    # print('in _single, aux losses', aux['losses'])
     return aux
 
   def _recycle(self, model_params, num_recycles=None, backprop=True):   
@@ -175,11 +180,11 @@ class _af_design:
 
     if mode in ["backprop","add_prev"]:
       # recycles compiled into model, only need single-pass
-      print('in _recycle, mode backprop or add_prev', mode)
+      # print('in _recycle, mode backprop or add_prev', mode)
       aux = self._single(model_params, backprop)
     
     else:
-      print('in _recycle, mode else', mode)
+      # print('in _recycle, mode else', mode)
       L = self._inputs["residue_index"].shape[0]
       
       # intialize previous
@@ -188,10 +193,15 @@ class _af_design:
                 'prev_pair': np.zeros([L,L,128])}
 
         if a["use_initial_guess"] and "batch" in self._inputs:
-          print('in _recycle, use_initial_guess and batch in inputs')
-          prev["prev_pos"] = self._inputs["batch"]["all_atom_positions"] 
+          # print('in _recycle, use_initial_guess and batch in inputs')
+          # print('in _recycle, batch["all_atom_positions"]', self._inputs["batch"]["all_atom_positions"].shape)
+          if self._cfg.model.embeddings_and_evoformer.crop:
+            prev["prev_pos"] = np.zeros([L,37,3])
+            prev["prev_pos"][:494,:,:] = self._inputs["batch"]["all_atom_positions"][:494,:,:] #115 115
+          else:
+            prev["prev_pos"] = self._inputs["batch"]["all_atom_positions"]
         else:
-          print('in _recycle, not using initial guess')
+          # print('in _recycle, not using initial guess')
           prev["prev_pos"] = np.zeros([L,37,3])
 
         if a["use_dgram"]:
@@ -200,10 +210,10 @@ class _af_design:
 
         if a["use_initial_atom_pos"]:
           if "batch" in self._inputs:
-            print('in _recycle, using initial atom pos')
+            # print('in _recycle, using initial atom pos')
             self._inputs["initial_atom_pos"] = self._inputs["batch"]["all_atom_positions"] 
           else:
-            print('in _recycle, not using initial atom pos')
+            # print('in _recycle, not using initial atom pos')
             self._inputs["initial_atom_pos"] = np.zeros([L,37,3])              
       
       self._inputs["prev"] = prev
@@ -216,7 +226,7 @@ class _af_design:
       if mode == "last":    mask[-1] = 1
       if mode == "first":   mask[0] = 1
       if mode == "none":    mask = mask
-      print('in _recycle, mask', mask)
+      # print('in _recycle, mask', mask)
 
       # gather gradients across recycles 
       grad = []
@@ -254,6 +264,8 @@ class _af_design:
 
     # save results
     self._save_results(save_best=save_best, verbose=verbose)
+    # print('in step, saving first pdb')
+    # self.save_pdb('/scicore/home/schwede/follon0000/BindCraft/example/PDL1/Trajectory/first.pdb')
 
     # increment
     self._k += 1
@@ -297,11 +309,12 @@ class _af_design:
       if self._args["best_metric"] in ["plddt","ptm","i_ptm","seqid","composite"] or metric_higher_better:
         metric = -metric
       if final or "metric" not in self._tmp["best"] or metric < self._tmp["best"]["metric"]: #not self._cfg.model.embeddings_and_evoformer.crop or 
-        print('in save best, saving new best')
+        # print('in save best, saving new best')
+        # print('last positions', aux["atom_positions"][-1, :, :])
         self._tmp["best"]["aux"] = copy_dict(aux)
         self._tmp["best"]["metric"] = metric
-      else:
-        print('in save best, not saving new best')
+      # else:
+      #   print('in save best, not saving new best')
 
     if verbose and ((self._k+1) % verbose) == 0:
       self._print_log(f"{self._k+1}", aux=aux)
@@ -313,7 +326,7 @@ class _af_design:
     '''predict structure for input sequence (if provided)'''
 
     def load_settings():    
-      if "save" in self._tmp:
+      if "save" in self._tmp and "opt" in self._tmp["save"][3]:
         [self.opt, self._args, self._params, self._inputs] = self._tmp.pop("save")
 
     def save_settings():
@@ -323,12 +336,17 @@ class _af_design:
     if save_final:
       #update opt
       self.opt['crop'] = self._cfg.model.embeddings_and_evoformer.crop
-      self._target_len = self._target_len + 100 #self._cfg.model.embeddings_and_evoformer.target_len
+      self.opt['final'] = self._cfg.model.embeddings_and_evoformer.final
+      if not self._cfg.model.embeddings_and_evoformer.crop:
+        add_length = 219 #81   
+      else:
+        add_length = 0
+      self._target_len = self._target_len + add_length #219 #self._cfg.model.embeddings_and_evoformer.target_len
       self._len = self._len #self._cfg.model.embeddings_and_evoformer.len
-      self._lengths = [self._lengths[0] + 100, self._lengths[1]]
-      print('in predict save final, after update opt', self.opt['crop'])
-      print('in predict save final, after update opt len', self._target_len, self._binder_len, self._len)
-      print('in predict save final, self._params["seq"]', self._params["seq"], self._params["seq"].shape)
+      self._lengths = [self._lengths[0] + add_length, self._lengths[1]] 
+      # print('in predict save final, after update opt', self.opt['crop'])
+      # print('in predict save final, after update opt len', self._target_len, self._binder_len, self._len)
+      # print('in predict save final, self._params["seq"]', self._params["seq"], self._params["seq"].shape)
 
     save_settings()
 
@@ -341,7 +359,6 @@ class _af_design:
     self.set_args(shuffle_first=False)
     
     # run
-    print('in design, predict, self.opt', self.opt['crop'])
     self.run(num_recycles=num_recycles, num_models=num_models,
              sample_models=sample_models, models=models, backprop=False, **kwargs)
     if verbose: self._print_log("predict")
@@ -490,12 +507,12 @@ class _af_design:
 
     # get starting sequence
     if hasattr(self,"aux"):
-      print('in design_semigreedy, getting seq from aux')
+      # print('in design_semigreedy, getting seq from aux')
       seq = self.aux["seq"]["logits"].argmax(-1)
     else:
-      print('in design_semigreedy, getting seq from params and inputs')
+      # print('in design_semigreedy, getting seq from params and inputs')
       seq = (self._params["seq"] + self._inputs["bias"]).argmax(-1)
-    print('in design_semigreedy, seq', seq, seq.shape)
+    # print('in design_semigreedy, seq', seq, seq.shape)
     # bias sampling towards the defined bias
     if seq_logits is None: seq_logits = 0
     
@@ -503,8 +520,8 @@ class _af_design:
     verbose = kwargs.pop("verbose",1)
 
     # get current plddt
-    print('in design_semigreedy, getting plddt')
-    print('in design_semigreedy, config', self._cfg.model.embeddings_and_evoformer.crop)
+    # print('in design_semigreedy, getting plddt')
+    # print('in design_semigreedy, config', self._cfg.model.embeddings_and_evoformer.crop)
     aux = self.predict(seq, return_aux=True, verbose=False, **model_flags, **kwargs)
     plddt = self.aux["plddt"]
     plddt = plddt[self._target_len:] if self.protocol == "binder" else plddt[:self._len]
@@ -512,17 +529,17 @@ class _af_design:
     # optimize!
     if verbose:
       print("Running semigreedy optimization...")
-    print('in design_semigreedy, number of iters', iters)
+    # print('in design_semigreedy, number of iters', iters)
     for i in range(iters):
-      print('in design_semigreedy, iter', i)
+      # print('in design_semigreedy, iter', i)
       buff = []
       model_nums = self._get_model_nums(**model_flags)
       num_tries = (tries+(e_tries-tries)*((i+1)/iters))
       for t in range(int(num_tries)):
-        print('in design_semigreedy, mutate', t, 'iters', i)
+        # print('in design_semigreedy, mutate', t, 'iters', i)
         mut_seq = self._mutate(seq=seq, plddt=plddt,
                                logits=seq_logits + self._inputs["bias"])
-        print('in design_semigreedy, mutated seq', mut_seq, mut_seq.shape)
+        # print('in design_semigreedy, mutated seq', mut_seq, mut_seq.shape)
         aux = self.predict(seq=mut_seq, return_aux=True, model_nums=model_nums, verbose=False, **kwargs)
         buff.append({"aux":aux, "seq":np.array(mut_seq)})
 
@@ -530,7 +547,7 @@ class _af_design:
       losses = [x["aux"]["loss"] for x in buff]
       best = buff[np.argmin(losses)]
       self.aux, seq = best["aux"], jnp.array(best["seq"])
-      print('saving seq', seq, seq.shape)
+      # print('saving seq', seq, seq.shape)
       self.set_seq(seq=seq, bias=self._inputs["bias"])
       self._save_results(save_best=save_best, verbose=verbose)
 
@@ -563,7 +580,7 @@ class _af_design:
           self.design_semigreedy(iters, tries=tries, e_tries=e_tries, **kwargs)
           if m < 2: iters = iters // 2
       else:
-        print('design_semigreedy hard_iters', hard_iters)
+        # print('design_semigreedy hard_iters', hard_iters)
         self.design_semigreedy(hard_iters, tries=tries, e_tries=e_tries, **kwargs)
 
   # ---------------------------------------------------------------------------------

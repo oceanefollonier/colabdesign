@@ -187,21 +187,26 @@ class AlphaFoldIteration(hk.Module):
                safe_key=None):
 
     # Compute representations for each MSA sample and average.
-    print('batch opt contains crop before evo', 'crop' in batch['opt'], batch['opt']['crop'])
-    print('config contains crop before evo?', self.config.embeddings_and_evoformer.crop)
+    # print('batch opt contains crop before evo', 'crop' in batch['opt'], batch['opt']['crop'])
+    # print('config contains crop before evo?', self.config.embeddings_and_evoformer.crop)
     # self.config.embeddings_and_evoformer.crop = batch['opt']['crop']
     embedding_module = EmbeddingsAndEvoformer(
         self.config.embeddings_and_evoformer, self.global_config)
 
     safe_key, safe_subkey = safe_key.split()
     representations = embedding_module(batch, safe_key=safe_subkey)
-
-    print('batch opt contains crop', 'crop' in batch['opt'])
+    # print('in af iterationrepresentations', representations['pair'].shape)
+    # print('saving representations pair')
+    # jnp.save('/scicore/home/schwede/follon0000/BindCraft/example/PDL1_notcropped_predict/representations_pair.npy', representations['pair'])
+    # print('batch opt contains crop', 'crop' in batch['opt'])
     if self.config.embeddings_and_evoformer.crop: #batch['opt']['crop']:
-      print('cropping,',batch['seq_mask'].shape)
+      # print('cropping,',batch['seq_mask'].shape)
+      array_slice = jnp.concatenate([jnp.arange(0,3),jnp.arange(12,24),jnp.arange(37,56),jnp.arange(61,70),jnp.arange(86,123),jnp.arange(124,143),jnp.arange(146,150),jnp.arange(151,154),jnp.arange(165,175),jnp.arange(184,237),jnp.arange(258,270),jnp.arange(289,291),jnp.arange(292,294),jnp.arange(296,298),jnp.arange(312,361),jnp.arange(371,376),jnp.arange(422,442),jnp.arange(454,468),jnp.arange(494,batch['seq_mask'].shape[0])], axis=0)
+      print('cropping, array_slice', array_slice.shape)
       # array_slice = jnp.concatenate([jnp.arange(0,3),jnp.arange(12,24),jnp.arange(37,56),jnp.arange(61,70),jnp.arange(86,123),jnp.arange(124,143),jnp.arange(146,150),jnp.arange(151,154),jnp.arange(165,175),jnp.arange(184,237),jnp.arange(258,270),jnp.arange(289,291),jnp.arange(292,294),jnp.arange(296,298),jnp.arange(312,361),jnp.arange(371,376),jnp.arange(422,436),jnp.arange(448,462),jnp.arange(488,batch['seq_mask'].shape[0])], axis=0)
-      array_slice = jnp.concatenate([jnp.arange(35,50),jnp.arange(115,batch['msa_mask'].shape[1])], axis=0)
+      # array_slice = jnp.concatenate([jnp.arange(35,50), jnp.arange(92,111),jnp.arange(115,batch['msa_mask'].shape[1])], axis=0)
       batch = crop_sizes(batch, batch['msa_mask'].shape[1], array_slice)
+
 
     self.representations = representations
     self.batch = batch
@@ -284,7 +289,7 @@ class AlphaFold(hk.Module):
       safe_key=None):
 
     c = self.config
-    print('in AlphaFold, c.crop', c.embeddings_and_evoformer.crop)
+    # print('in AlphaFold, c.crop', c.embeddings_and_evoformer.crop)
     impl = AlphaFoldIteration(c, self.global_config)
 
     if safe_key is None:
@@ -528,11 +533,13 @@ class EmbeddingsAndEvoformer(hk.Module):
       # with jax.checking_leaks():
       # if True: #len(batch['opt']['crop']) == 1: #evoformer_input['msa'].shape[1] == batch['seq']['logits'].shape[1]+15:
       #   print('already cropped evoformer')
-      print('config contains crop', c.crop)
+      # print('config contains crop', c.crop)
       if c.crop:
-        print('cropping evoformer input')
-        # jax_array_slice = jnp.concatenate([jnp.arange(0,3),jnp.arange(12,24),jnp.arange(37,56),jnp.arange(61,70),jnp.arange(86,123),jnp.arange(124,143),jnp.arange(146,150),jnp.arange(151,154),jnp.arange(165,175),jnp.arange(184,237),jnp.arange(258,270),jnp.arange(289,291),jnp.arange(292,294),jnp.arange(296,298),jnp.arange(312,361),jnp.arange(371,376),jnp.arange(422,436),jnp.arange(448,462),jnp.arange(488,evoformer_input['msa'].shape[1])], axis=0)
-        jax_array_slice = jnp.concatenate([jnp.arange(35,50),jnp.arange(115,evoformer_input['msa'].shape[1])], axis=0)
+        # print('cropping evoformer input')
+        jax_array_slice = jnp.concatenate([jnp.arange(0,3),jnp.arange(12,24),jnp.arange(37,56),jnp.arange(61,70),jnp.arange(86,123),jnp.arange(124,143),jnp.arange(146,150),jnp.arange(151,154),jnp.arange(165,175),jnp.arange(184,237),jnp.arange(258,270),jnp.arange(289,291),jnp.arange(292,294),jnp.arange(296,298),jnp.arange(312,361),jnp.arange(371,376),jnp.arange(422,442),jnp.arange(454,468),jnp.arange(494,evoformer_input['msa'].shape[1])], axis=0)
+        print('cropping evoformer input, jax_array_slice', jax_array_slice.shape)
+        # # jax_array_slice = jnp.concatenate([jnp.arange(0,3),jnp.arange(12,24),jnp.arange(37,56),jnp.arange(61,70),jnp.arange(86,123),jnp.arange(124,143),jnp.arange(146,150),jnp.arange(151,154),jnp.arange(165,175),jnp.arange(184,237),jnp.arange(258,270),jnp.arange(289,291),jnp.arange(292,294),jnp.arange(296,298),jnp.arange(312,361),jnp.arange(371,376),jnp.arange(422,436),jnp.arange(448,462),jnp.arange(488,evoformer_input['msa'].shape[1])], axis=0)
+        # jax_array_slice = jnp.concatenate([jnp.arange(35,50),jnp.arange(92,111),jnp.arange(115,evoformer_input['msa'].shape[1])], axis=0)
         for k in evoformer_input:
           if 'pair' in k:
             evoformer_input[k] = evoformer_input[k][jax_array_slice[:, np.newaxis], jax_array_slice,:]#[jax_array_slice, jax_array_slice, :]

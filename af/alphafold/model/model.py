@@ -42,7 +42,6 @@ class RunModel:
     if self.mode is None: self.mode = []
 
     def _forward_fn(batch):
-      print('in RunModel _forward_fn')
       if use_multimer:
         model = modules_multimer.AlphaFold(self.config.model)
       else:
@@ -55,7 +54,6 @@ class RunModel:
     self.apply_fn = jax.jit(hk.transform(_forward_fn).apply)
     
     def apply(params, key, feat):
-      print('running Runmodel apply')
       if "prev" in feat:
         prev = feat["prev"]      
       else:
@@ -66,7 +64,6 @@ class RunModel:
         if self.config.global_config.use_dgram:
           prev['prev_dgram'] = np.zeros([L,L,64])
         feat["prev"] = prev
-      print('in Runmodel apply, feat["prev"]', prev['prev_msa_first_row'].shape)
 
       ################################
       # decide how to run recycles
@@ -75,7 +72,6 @@ class RunModel:
         # use scan()
         def loop(prev, sub_key):
           feat["prev"] = prev
-          print('running RunModel using scan')
           results = self.apply_fn(params, sub_key, feat)
           prev = results["prev"]
           if "backprop" not in self.mode:
@@ -93,7 +89,6 @@ class RunModel:
       
       else:
         # single pass
-        print('running RunModel single pass')
         results = self.apply_fn(params, key, feat)
       
       return results

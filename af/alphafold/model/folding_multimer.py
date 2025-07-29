@@ -551,6 +551,7 @@ def generate_monomer_rigids(representations: Mapping[str, jnp.ndarray],
       return act, out
 
   keys = jax.random.split(safe_key.get(), c.num_layer)
+  activations_first, output_first = fold_iter(activations, keys[0,:])
   activations, output = hk.scan(fold_iter, activations, keys)
   output['act'] = activations['act']
   return output

@@ -223,9 +223,11 @@ class AlphaFoldIteration(hk.Module):
     representations = evoformer_module(batch)   
 
     if self.config.embeddings_and_evoformer.crop: #True:
-      print('cropping,',batch['seq_mask'].shape)
-      # array_slice = jnp.concatenate([jnp.arange(0,3),jnp.arange(12,24),jnp.arange(37,56),jnp.arange(61,70),jnp.arange(86,123),jnp.arange(124,143),jnp.arange(146,150),jnp.arange(151,154),jnp.arange(165,175),jnp.arange(184,237),jnp.arange(258,270),jnp.arange(289,291),jnp.arange(292,294),jnp.arange(296,298),jnp.arange(312,361),jnp.arange(371,376),jnp.arange(422,436),jnp.arange(448,462),jnp.arange(488,batch['seq_mask'].shape[0])], axis=0)
-      array_slice = jnp.concatenate([jnp.arange(35,50),jnp.arange(115,batch['msa_mask'].shape[1])], axis=0)
+      # print('cropping,',batch['seq_mask'].shape)
+      array_slice = jnp.concatenate([jnp.arange(0,3),jnp.arange(12,24),jnp.arange(37,56),jnp.arange(61,70),jnp.arange(86,123),jnp.arange(124,143),jnp.arange(146,150),jnp.arange(151,154),jnp.arange(165,175),jnp.arange(184,237),jnp.arange(258,270),jnp.arange(289,291),jnp.arange(292,294),jnp.arange(296,298),jnp.arange(312,361),jnp.arange(371,376),jnp.arange(422,442),jnp.arange(454,468),jnp.arange(494,batch['seq_mask'].shape[0])], axis=0)
+      print('modules array_slice', array_slice.shape)
+      # # array_slice = jnp.concatenate([jnp.arange(0,3),jnp.arange(12,24),jnp.arange(37,56),jnp.arange(61,70),jnp.arange(86,123),jnp.arange(124,143),jnp.arange(146,150),jnp.arange(151,154),jnp.arange(165,175),jnp.arange(184,237),jnp.arange(258,270),jnp.arange(289,291),jnp.arange(292,294),jnp.arange(296,298),jnp.arange(312,361),jnp.arange(371,376),jnp.arange(422,436),jnp.arange(448,462),jnp.arange(488,batch['seq_mask'].shape[0])], axis=0)
+      # array_slice = jnp.concatenate([jnp.arange(35,50),jnp.arange(92,111),jnp.arange(115,batch['msa_mask'].shape[1])], axis=0)
       batch = crop_sizes(batch, batch['msa_mask'].shape[1], array_slice) 
     
     head_factory = {
@@ -263,7 +265,6 @@ class AlphaFold(hk.Module):
 
   def __call__(self, batch, **kwargs):
     """Run the AlphaFold model."""
-    print('in AlphaFold monomer')
     impl = AlphaFoldIteration(self.config, self.global_config)
 
     def get_prev(ret):
@@ -1665,9 +1666,11 @@ class EmbeddingsAndEvoformer(hk.Module):
         evoformer_masks['msa'] = jnp.concatenate([evoformer_masks['msa'], torsion_angle_mask], axis=0)    
       ####################################################################
       if c.crop: #True:
-        print('cropping evoformer input')
+        # print('cropping monomer evoformer input')
         # jax_array_slice = jnp.concatenate([jnp.arange(0,3),jnp.arange(12,24),jnp.arange(37,56),jnp.arange(61,70),jnp.arange(86,123),jnp.arange(124,143),jnp.arange(146,150),jnp.arange(151,154),jnp.arange(165,175),jnp.arange(184,237),jnp.arange(258,270),jnp.arange(289,291),jnp.arange(292,294),jnp.arange(296,298),jnp.arange(312,361),jnp.arange(371,376),jnp.arange(422,436),jnp.arange(448,462),jnp.arange(488,evoformer_input['msa'].shape[1])], axis=0)
-        jax_array_slice = jnp.concatenate([jnp.arange(35,50),jnp.arange(115,evoformer_input['msa'].shape[1])], axis=0)
+        jax_array_slice = jnp.concatenate([jnp.arange(0,3),jnp.arange(12,24),jnp.arange(37,56),jnp.arange(61,70),jnp.arange(86,123),jnp.arange(124,143),jnp.arange(146,150),jnp.arange(151,154),jnp.arange(165,175),jnp.arange(184,237),jnp.arange(258,270),jnp.arange(289,291),jnp.arange(292,294),jnp.arange(296,298),jnp.arange(312,361),jnp.arange(371,376),jnp.arange(422,442),jnp.arange(454,468),jnp.arange(494,evoformer_input['msa'].shape[1])], axis=0)
+        print('cropping evoformer slice', jax_array_slice.shape)
+        # jax_array_slice = jnp.concatenate([jnp.arange(35,50),jnp.arange(92,111),jnp.arange(115,evoformer_input['msa'].shape[1])], axis=0)
         for k in evoformer_input:
           if 'pair' in k:
             evoformer_input[k] = evoformer_input[k][jax_array_slice[:, np.newaxis], jax_array_slice,:]#[jax_array_slice, jax_array_slice, :]

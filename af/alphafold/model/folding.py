@@ -465,9 +465,10 @@ def generate_affines(representations, batch, config, global_config, safe_key):
     return act, out  
   keys = jax.random.split(safe_key.get(), c.num_layer)
   activations, output = hk.scan(fold_iter, activations, keys)
+  activations_first, output_first = hk.scan(fold_iter, activations, keys[:1,:])
   
   # Include the activations in the output dict for use by the LDDT-Head.
-  output['act'] = activations['act']
+  output['act'] = activations_first['act']
 
   return output
 
