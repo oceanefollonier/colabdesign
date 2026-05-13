@@ -15,7 +15,7 @@ class design_model:
     '''
     set weights
     -------------------
-    note: model.restart() resets the weights to their defaults
+    note: model.res_get_seqt() resets the weights to their defaults
     use model.set_weights(..., set_defaults=True) to avoid this
     -------------------
     model.set_weights(rmsd=1)

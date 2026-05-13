@@ -30,8 +30,119 @@ from colabdesign.af.alphafold.model import utils
 import haiku as hk
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from colabdesign.af.alphafold.model.r3 import Rigids, Rots, Vecs
+
+def crop_sizes(input_dict, old_dim, array_slice, verbose=False):
+  """Crops the input to the new size given by slice.
+  Args:
+    input_dict: input dictionary with tensors.
+    old_dim: old dimension to be changed.
+    array_slice: slice to crop the input tensor to.
+    verbose: whether to print debug information.
+
+  Returns:
+    Dict of cropped tensors.
+  """
+  # print('beginning crop dict', old_dim)
+  for k in input_dict:
+    # print(f'in begin input_dict {k}')
+    if isinstance(input_dict[k], dict):
+      for kk in input_dict[k]:
+        if isinstance(input_dict[k][kk], dict):
+          for kkk in input_dict[k][kk]:
+            indices_to_change = [x for x, y in enumerate(input_dict[k][kk][kkk].shape) if y == old_dim]
+            if len(indices_to_change) == 0:
+              # print('in input_dict subsubdict nothing to change')
+              input_dict[k][kk][kkk] = input_dict[k][kk][kkk]
+            else:
+              print('STILL DO TO input_dict SUBSUBDICT',indices_to_change)
+        else:
+          # print(f'input_dict {k}, {kk} shape: {input_dict[k][kk].shape}')
+          # if kk == 'crop':
+          #   continue
+          indices_to_change = [x for x, y in enumerate(input_dict[k][kk].shape) if y == old_dim]
+          # print('in input_dict subdict indices',indices_to_change)
+          if len(indices_to_change) == 0:
+            # print('in input_dict subdict nothing to change')
+            input_dict[k][kk] = input_dict[k][kk]
+          elif len(indices_to_change) == 1:
+            # jax.debug.print(f'verbose in {k}, {kk} indices shape {input_dict[k][kk].shape} subdict')
+            # jax.debug.print("vv: {}", input_dict[k][kk])
+            if indices_to_change[0] == 0:
+              if len(input_dict[k][kk].shape) == 1:
+                input_dict[k][kk] = input_dict[k][kk][array_slice]
+              elif len(input_dict[k][kk].shape) == 2:
+                input_dict[k][kk] = input_dict[k][kk][array_slice, :]
+              elif len(input_dict[k][kk].shape) == 3:
+                input_dict[k][kk] = input_dict[k][kk][array_slice, :, :]
+              elif len(input_dict[k][kk].shape) == 4:
+                input_dict[k][kk] = input_dict[k][kk][array_slice, :, :, :]
+            elif indices_to_change[0] == 1:
+              if len(input_dict[k][kk].shape) == 2:
+                input_dict[k][kk] = input_dict[k][kk][:, array_slice]
+              elif len(input_dict[k][kk].shape) == 3:
+                input_dict[k][kk] = input_dict[k][kk][:, array_slice, :]
+              elif len(input_dict[k][kk].shape) == 4:
+                input_dict[k][kk] = input_dict[k][kk][:, array_slice, :, :]
+            elif indices_to_change[0] == 2:
+              if len(input_dict[k][kk].shape) == 3:
+                input_dict[k][kk] = input_dict[k][kk][:, :, array_slice]
+              elif len(input_dict[k][kk].shape) == 4:
+                input_dict[k][kk] = input_dict[k][kk][:, :, array_slice, :]
+            elif indices_to_change[0] == 3:
+              if len(input_dict[k][kk].shape) == 4:
+                input_dict[k][kk] = input_dict[k][kk][:, :, :, array_slice]
+          else:
+            print('STILL DO TO input_dict SUBDICT',indices_to_change)
+    else:
+      if not hasattr(input_dict[k], "shape"):
+        input_dict[k] = input_dict[k]
+        continue
+      indices_to_change = [x for x, y in enumerate(input_dict[k].shape) if y == old_dim]
+      # print(f'in input_dict indices, {k}',indices_to_change)
+      if len(indices_to_change) == 1:
+        # if verbose:
+        #   jax.debug.print(f'verbose in input_dict {k} shape: {input_dict[k].shape}')
+        #   jax.debug.print("v: {}", input_dict[k])
+        if indices_to_change[0] == 0:
+          if len(input_dict[k].shape) == 1:
+            input_dict[k] = input_dict[k][array_slice]
+          elif len(input_dict[k].shape) == 2:
+            input_dict[k] = input_dict[k][array_slice, :]
+          elif len(input_dict[k].shape) == 3:
+            input_dict[k] = input_dict[k][array_slice, :, :]
+          elif len(input_dict[k].shape) == 4:
+            input_dict[k] = input_dict[k][array_slice, :, :, :]
+        if indices_to_change[0] == 1:
+          if len(input_dict[k].shape) == 2:
+            input_dict[k] = input_dict[k][:, array_slice]
+          elif len(input_dict[k].shape) == 3:
+            input_dict[k] = input_dict[k][:, array_slice, :]
+          elif len(input_dict[k].shape) == 4:
+            input_dict[k] = input_dict[k][:, array_slice, :, :]
+        if indices_to_change[0] == 2:
+          if len(input_dict[k].shape) == 3:
+            input_dict[k] = input_dict[k][:, :, array_slice]
+          elif len(input_dict[k].shape) == 4:
+            input_dict[k] = input_dict[k][:, :, array_slice, :]
+        if indices_to_change[0] == 3:
+          if len(input_dict[k].shape) == 4:
+            input_dict[k] = input_dict[k][:, :, :, array_slice]
+      elif len(indices_to_change) > 1:
+        if (indices_to_change[0] == 0) & (indices_to_change[1] == 1):
+          if len(input_dict[k].shape) == 3:
+            input_dict[k] = input_dict[k][array_slice[:, np.newaxis], array_slice,:]
+          else:
+            print('still to do not 3D', input_dict[k].shape)
+        else:
+          print('still to do with more than 2 indices', indices_to_change)
+      else:
+        # print('nothing to change')
+        input_dict[k] = input_dict[k]
+  # print('finished crop dict', input_dict)
+  return input_dict 
 
 def apply_dropout(*, tensor, safe_key, rate, broadcast_dim=None):
   """Applies dropout to a tensor."""
@@ -112,7 +223,27 @@ class AlphaFoldIteration(hk.Module):
 
     # Compute representations for each batch element and average.
     evoformer_module = EmbeddingsAndEvoformer(self.config.embeddings_and_evoformer, self.global_config)
-    representations = evoformer_module(batch)    
+    representations = evoformer_module(batch)   
+
+    if self.config.embeddings_and_evoformer.crop: #True:
+      # print('cropping,',batch['seq_mask'].shape)
+      # array_slice = jnp.concatenate([jnp.arange(0,3),jnp.arange(12,24),jnp.arange(37,56),jnp.arange(61,70),jnp.arange(86,123),jnp.arange(124,143),jnp.arange(146,150),jnp.arange(151,154),jnp.arange(165,175),jnp.arange(184,237),jnp.arange(258,270),jnp.arange(289,291),jnp.arange(292,294),jnp.arange(296,298),jnp.arange(312,361),jnp.arange(371,376),jnp.arange(422,442),jnp.arange(454,468),jnp.arange(494,batch['seq_mask'].shape[0])], axis=0)
+      # print('modules array_slice', array_slice.shape)
+      # # array_slice = jnp.concatenate([jnp.arange(0,3),jnp.arange(12,24),jnp.arange(37,56),jnp.arange(61,70),jnp.arange(86,123),jnp.arange(124,143),jnp.arange(146,150),jnp.arange(151,154),jnp.arange(165,175),jnp.arange(184,237),jnp.arange(258,270),jnp.arange(289,291),jnp.arange(292,294),jnp.arange(296,298),jnp.arange(312,361),jnp.arange(371,376),jnp.arange(422,436),jnp.arange(448,462),jnp.arange(488,batch['seq_mask'].shape[0])], axis=0)
+      # array_slice = jnp.concatenate([jnp.arange(35,50),jnp.arange(92,111),jnp.arange(115,batch['msa_mask'].shape[1])], axis=0)
+      crop_indices = self.config.embeddings_and_evoformer.crop_indices
+      to_concat = []
+      for i in range(0, len(crop_indices) - 1, 2):
+        to_concat.append(jnp.arange(crop_indices[i], crop_indices[i+1]))
+      to_concat.append(jnp.arange(crop_indices[-1], batch['msa_mask'].shape[1]))
+      array_slice = jnp.concatenate(to_concat, axis=0)
+      # try:
+      #   print('DBG EVO slice', {
+      #     'slice_len': int(array_slice.shape[0])
+      #   })
+      # except Exception:
+      #   pass
+      batch = crop_sizes(batch, batch['msa_mask'].shape[1], array_slice) 
     
     head_factory = {
           'masked_msa': MaskedMsaHead,
@@ -1549,6 +1680,30 @@ class EmbeddingsAndEvoformer(hk.Module):
         torsion_angle_mask = torsion_angle_mask.astype(evoformer_masks['msa'].dtype)
         evoformer_masks['msa'] = jnp.concatenate([evoformer_masks['msa'], torsion_angle_mask], axis=0)    
       ####################################################################
+      if c.crop: #True:
+        # print('cropping monomer evoformer input')
+        # # jax_array_slice = jnp.concatenate([jnp.arange(0,3),jnp.arange(12,24),jnp.arange(37,56),jnp.arange(61,70),jnp.arange(86,123),jnp.arange(124,143),jnp.arange(146,150),jnp.arange(151,154),jnp.arange(165,175),jnp.arange(184,237),jnp.arange(258,270),jnp.arange(289,291),jnp.arange(292,294),jnp.arange(296,298),jnp.arange(312,361),jnp.arange(371,376),jnp.arange(422,436),jnp.arange(448,462),jnp.arange(488,evoformer_input['msa'].shape[1])], axis=0)
+        # jax_array_slice = jnp.concatenate([jnp.arange(0,3),jnp.arange(12,24),jnp.arange(37,56),jnp.arange(61,70),jnp.arange(86,123),jnp.arange(124,143),jnp.arange(146,150),jnp.arange(151,154),jnp.arange(165,175),jnp.arange(184,237),jnp.arange(258,270),jnp.arange(289,291),jnp.arange(292,294),jnp.arange(296,298),jnp.arange(312,361),jnp.arange(371,376),jnp.arange(422,442),jnp.arange(454,468),jnp.arange(494,evoformer_input['msa'].shape[1])], axis=0)
+        # print('cropping evoformer slice', jax_array_slice.shape)
+        # jax_array_slice = jnp.concatenate([jnp.arange(35,50),jnp.arange(92,111),jnp.arange(115,evoformer_input['msa'].shape[1])], axis=0)
+        crop_indices = c.crop_indices
+        to_concat = []
+        for i in range(0, len(crop_indices) - 1, 2):
+          to_concat.append(jnp.arange(crop_indices[i], crop_indices[i+1]))
+        to_concat.append(jnp.arange(crop_indices[-1], evoformer_input['msa'].shape[1]))
+        jax_array_slice = jnp.concatenate(to_concat, axis=0)
+        for k in evoformer_input:
+          if 'pair' in k:
+            evoformer_input[k] = evoformer_input[k][jax_array_slice[:, np.newaxis], jax_array_slice,:]#[jax_array_slice, jax_array_slice, :]
+          # else:
+          #   evoformer_input[k] = evoformer_input[k][:, jax_array_slice, :]
+        for k in evoformer_masks:
+          if 'pair' in k:
+            evoformer_masks[k] = evoformer_masks[k][jax_array_slice[:, np.newaxis], jax_array_slice]#[jax_array_slice, jax_array_slice, :][jax_array_slice, jax_array_slice]
+          else:
+            evoformer_masks[k] = evoformer_masks[k][:,jax_array_slice]
+        evoformer_input['msa'] = evoformer_input['msa'][:, jax_array_slice, :]
+
       if c.use_msa:
         # Main trunk of the network
         # Jumper et al. (2021) Suppl. Alg. 2 "Inference" lines 17-18

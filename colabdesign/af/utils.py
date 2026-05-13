@@ -67,16 +67,67 @@ class _af_utils:
     - set get_best=False, to get the last sampled sequence
     '''
     if aux is None:
+      # print('in save_pdb, aux is None, crop', self._cfg.model.embeddings_and_evoformer.crop,self._tmp["best"]['aux']['aatype'].shape)
       aux = self._tmp["best"]["aux"] if (get_best and "aux" in self._tmp["best"]) else self.aux
     aux = aux["all"]
     
     p = {k:aux[k] for k in ["aatype","residue_index","atom_positions","atom_mask"]}
     p["b_factors"] = 100 * p["atom_mask"] * aux["plddt"][...,None]
+    # print('in save_pdb, p["b_factors"]', p["b_factors"].shape, p["b_factors"][0])
+    # print('in save_pdb, plddt', aux["plddt"].shape, aux["plddt"][0])
+    # if not self._cfg.model.embeddings_and_evoformer.crop:
+    #   print('in save_pdb, p["atom_positions"]', p["atom_positions"].shape, p["atom_positions"][0])
+    #   print('in save_pdb, hotspots', self._inputs['opt']['hotspot'])
+    #   print('in save_pdb, p["atom_mask"]', p["atom_mask"].shape, p["atom_mask"])
+
+    # print('in save_pdb, p["atom_mask"]', p["atom_mask"].shape)
+    # print('in save_pdb, p["atom_positions"]', p["atom_positions"].shape)
+
 
     def to_pdb_str(x, n=None):
       p_str = protein.to_pdb(protein.Protein(**x))
       p_str = "\n".join(p_str.splitlines()[1:-2])
-      if renum_pdb: p_str = renum_pdb_str(p_str, self._lengths)
+      # Use CROPPED lengths for chain assignment (PDB only has cropped residues)
+      # Then restoration will map back to original chain IDs and residue numbers
+      # if hasattr(self, '_pdb') and self._pdb is not None and "lengths" in self._pdb:
+      #   print('in save_pdb, using cropped lengths for chain assignment:', self._lengths, 'then restoring to original IDs')
+      # else:
+      #   print('in save_pdb, lengths', self._lengths)
+      if renum_pdb:
+        p_str = renum_pdb_str(p_str, self._lengths)
+        # Restore original BINDER residue numbers (keep chain IDs from renum_pdb_str)
+        if self.protocol == "partial_binder" and hasattr(self, '_pdb') and self._pdb is not None and "idx" in self._pdb and "chain" in self._pdb["idx"]:
+          original_chains = self._pdb["idx"]["chain"]
+          original_residues = self._pdb["idx"]["residue"]
+          # print(f'[DEBUG] original_chains', original_chains, len(original_chains))
+          # print(f'[DEBUG] self._args.get("binder_chain", "B")', self._args.get("binder_chain", "B"))
+          # Find where binder starts in original structure (first 'B' chain)
+          binder_start_orig = np.where(original_chains == self._args.get("binder_chain", "B"))[0][0] if hasattr(self, '_args') and self._args.get("binder_chain") else np.where(original_chains != original_chains[0])[0][0]
+          # Binder starts at position self._lengths[0] in cropped structure
+          binder_start_crop = self._lengths[0]
+          # print(f'[DEBUG] Binder starts at cropped position {binder_start_crop}, maps to original position {binder_start_orig}')
+          lines = p_str.split("\n")
+          last_resnum_chain = None
+          residue_idx = -1
+          chain_b_count = 0
+          for i, line in enumerate(lines):
+            if line[:4] == "ATOM" and len(line) > 26:
+              current_resnum_chain = (line[22:26].strip(), line[21])
+              current_chain = line[21]
+              # Check if we've moved to a new residue
+              if last_resnum_chain is None or current_resnum_chain != last_resnum_chain:
+                residue_idx += 1
+                last_resnum_chain = current_resnum_chain
+              # Only restore residue numbers for binder (chain B), keep chain IDs from renum_pdb_str
+              if current_chain == 'B' and residue_idx >= binder_start_crop:
+                binder_offset = residue_idx - binder_start_crop
+                orig_idx = binder_start_orig + binder_offset
+                if orig_idx < len(original_residues):
+                  orig_resnum = original_residues[orig_idx]
+                  lines[i] = line[:22] + f"{orig_resnum:4d}" + line[26:]
+                  chain_b_count += 1
+          # print(f'[DEBUG] After restoration: residue_idx reached {residue_idx}, chain B atoms: {chain_b_count}')
+          p_str = "\n".join(lines)
       if n is not None:
         p_str = f"MODEL{n:8}\n{p_str}\nENDMDL\n"
       return p_str
@@ -85,12 +136,68 @@ class _af_utils:
     for n in range(p["atom_positions"].shape[0]):
       p_str += to_pdb_str(jax.tree_util.tree_map(lambda x:x[n],p), n+1)
     p_str += "END\n"
-    
+
+    # Match ATOM lines and extract chain ID from column 21 (character position 21)
+    chain_ids_in_pdb = set()
+    for line in p_str.split('\n'):
+      if line.startswith('ATOM') and len(line) > 21:
+        chain_id = line[21] if line[21] != ' ' else line[20] if len(line) > 20 else None
+        if chain_id and chain_id.isalpha():
+          chain_ids_in_pdb.add(chain_id)
+
     if filename is None:
+      # print('return pdb, filename is None')
       return p_str
     else: 
+      # print('saving pdb to', filename)
       with open(filename, 'w') as f:
         f.write(p_str)
+
+  # def save_pdb_from_aux(self, aux, filename=None, renum_pdb=True):
+  #   '''
+  #   temporary helper to save pdb directly from an input aux dict.
+  #   required aux keys:
+  #     - aatype
+  #     - residue_index
+  #     - atom_positions
+  #     - atom_mask
+  #   unlike save_pdb(), this method does not require plddt.
+  #   '''
+  #   required = ["aatype", "residue_index", "atom_positions", "atom_mask"]
+  #   missing = [k for k in required if k not in aux]
+  #   if missing:
+  #     raise ValueError(f"aux is missing required keys: {missing}")
+  #
+  #   p = {k: aux[k] for k in required}
+  #
+  #   # protein.to_pdb expects b_factors; use mask-based placeholder values.
+  #   p["b_factors"] = 100 * p["atom_mask"].astype(float)
+  #
+  #   # Ensure a leading model axis exists so both single-model and multi-model
+  #   # inputs are supported.
+  #   if p["atom_positions"].ndim == 3:
+  #     p = jax.tree_util.tree_map(lambda x: x[None], p)
+  #
+  #   def to_pdb_str(x, n=None):
+  #     p_str = protein.to_pdb(protein.Protein(**x))
+  #     p_str = "\n".join(p_str.splitlines()[1:-2])
+  #     if renum_pdb:
+  #       p_str = renum_pdb_str(p_str, self._lengths)
+  #     if n is not None:
+  #       p_str = f"MODEL{n:8}\n{p_str}\nENDMDL\n"
+  #     return p_str
+  #
+  #   p_str = ""
+  #   for n in range(p["atom_positions"].shape[0]):
+  #     p_str += to_pdb_str(jax.tree_util.tree_map(lambda x: x[n], p), n + 1)
+  #   p_str += "END\n"
+  #
+  #   if filename is None:
+  #     return p_str
+  #   else:
+  #     print('saving pdb to', filename)
+  #     with open(filename, 'w') as f:
+  #       f.write(p_str)
 
   #-------------------------------------
   # plotting functions

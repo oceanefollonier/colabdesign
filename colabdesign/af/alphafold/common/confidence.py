@@ -111,7 +111,7 @@ def compute_predicted_aligned_error(logits, breaks, use_jnp=False):
   }
 
 def predicted_tm_score(logits, breaks, residue_weights = None,
-    asym_id = None, use_jnp=False):
+    asym_id = None, use_jnp=False, crop_indices=None):
   """Computes predicted TM alignment or predicted interface TM alignment score.
 
   Args:
@@ -122,6 +122,7 @@ def predicted_tm_score(logits, breaks, residue_weights = None,
       expectation.
     asym_id: [num_res] the asymmetric unit ID - the chain ID. Only needed for
       ipTM calculation.
+    crop_indices: [i1, i2, i3, ...] the indices to crop the logits to (keeps the indices i1:i2, i3:i4, ...).
 
   Returns:
     ptm_score: The predicted TM alignment or the predicted iTM score.
@@ -130,15 +131,14 @@ def predicted_tm_score(logits, breaks, residue_weights = None,
     _np, _softmax = jnp, jax.nn.softmax
   else:
     _np, _softmax = np, scipy.special.softmax
-
+  
   # residue_weights has to be in [0, 1], but can be floating-point, i.e. the
   # exp. resolved head's probability.
   if residue_weights is None:
     residue_weights = _np.ones(logits.shape[0])
-
+    
   bin_centers = _calculate_bin_centers(breaks, use_jnp=use_jnp)
   num_res = residue_weights.shape[0]
-
   # Clip num_res to avoid negative/undefined d0.
   clipped_num_res = _np.maximum(residue_weights.sum(), 19)
 
@@ -147,6 +147,18 @@ def predicted_tm_score(logits, breaks, residue_weights = None,
   # quality", 2004: http://zhanglab.ccmb.med.umich.edu/papers/2004_3.pdf
   d0 = 1.24 * (clipped_num_res - 15) ** (1./3) - 1.8
 
+  # Crop logits to match num_res
+  if logits.shape[0] != num_res:
+    if logits.shape[0] > num_res and crop_indices is not None:
+      crop_indices = crop_indices
+      to_concat = []
+      for i in range(0, len(crop_indices) - 1, 2):
+        to_concat.append(jnp.arange(crop_indices[i], crop_indices[i+1]))
+      array_slice = jnp.concatenate(to_concat, axis=0)
+      logits = logits[array_slice[:, np.newaxis], array_slice,:]
+    elif crop_indices is None:
+      raise ValueError("crop_indices is None but required for cropping logits to match num_res")
+  
   # Convert logits to probs.
   probs = _softmax(logits, axis=-1)
 

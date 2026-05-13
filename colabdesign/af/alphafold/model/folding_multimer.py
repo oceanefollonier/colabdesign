@@ -551,6 +551,7 @@ def generate_monomer_rigids(representations: Mapping[str, jnp.ndarray],
       return act, out
 
   keys = jax.random.split(safe_key.get(), c.num_layer)
+  activations_first, output_first = fold_iter(activations, keys[0,:])
   activations, output = hk.scan(fold_iter, activations, keys)
   output['act'] = activations['act']
   return output
@@ -608,6 +609,20 @@ class StructureModule(hk.Module):
     ret['final_atom14_mask'] = atom14_pred_mask  # (N, 14)
 
     atom37_mask = all_atom_multimer.get_atom37_mask(aatype) * seq_mask[:, None]
+    
+    # # TMP: handle 4D atom14 (all stages) for debug PDB export
+    # print('in StructureModule, atom14_pred_positions.shape', atom14_pred_positions.shape)
+    # if len(atom14_pred_positions.shape) == 4: ## TMP!!
+    #   atom37_pred_positions = jnp.stack(
+    #       [all_atom_multimer.atom14_to_atom37(atom14_pred_positions[i], aatype)
+    #        for i in range(atom14_pred_positions.shape[0])],
+    #       axis=0)
+    #   atom37_pred_positions *= atom37_mask[None, :, :, None]
+    #   ret['all_atom_positions'] = atom37_pred_positions
+    #   ret['all_atom_mask'] = jnp.broadcast_to(
+    #       atom37_mask, (atom37_pred_positions.shape[0],) + atom37_mask.shape)
+    #   ret['final_atom_positions'] = atom37_pred_positions[-1]
+    # else:
     atom37_pred_positions = all_atom_multimer.atom14_to_atom37(
         atom14_pred_positions, aatype)
     atom37_pred_positions *= atom37_mask[:, :, None]

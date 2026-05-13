@@ -17,7 +17,7 @@
 import functools
 import inspect
 
-from typing import Any, Callable, Optional, Sequence, TypeVar, Union
+from typing import Any, Callable, Optional, Sequence, Union
 
 import haiku as hk
 import jax
@@ -29,16 +29,6 @@ PYTREE_JAX_ARRAY = Any
 
 partial = functools.partial
 PROXY = object()
-
-T = TypeVar('T')
-def _set_docstring(docstr: str) -> Callable[[T], T]:
-  """Decorator for setting the docstring of a function."""
-
-  def wrapped(fun: T) -> T:
-    fun.__doc__ = docstr.format(fun=getattr(fun, '__name__', repr(fun)))
-    return fun
-
-  return wrapped
 
 
 def _maybe_slice(array, i, slice_size, axis):
@@ -129,8 +119,7 @@ def sharded_apply(
   if shard_size is None:
     return fun
 
-  @_set_docstring(docstr)
-  @functools.wraps(fun)
+  @jax.util.wraps(fun, docstr=docstr)
   def mapped_fn(*args):
     # Expand in axes and Determine Loop range
     in_axes_ = _expand_axes(in_axes, args)

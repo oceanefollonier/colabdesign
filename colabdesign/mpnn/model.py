@@ -95,7 +95,7 @@ class mk_mpnn_model():
     self.pdb = pdb
     
     if verbose:
-      print("lengths", self._lengths)
+      # print("lengths", self._lengths)
       if "fix_pos" in self._inputs:
         print("the following positions will be fixed:")
         print(self._inputs["fix_pos"])
