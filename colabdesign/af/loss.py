@@ -41,13 +41,10 @@ class _af_loss:
     binder_id = zeros.at[-bL:].set(mask[-bL:])
     if "hotspot" in opt and opt["hotspot"] is not None and len(opt["hotspot"]) > 0:
       # Use hotspots if they are defined and non-empty
-      # print('in loss_binder, opt["hotspot"]',opt["hotspot"], inputs["seq_mask"].shape)
-      # jax.debug.print("in loss_binder, opt['hotspot']: {}",opt["hotspot"])
       target_id = zeros.at[opt["hotspot"]].set(mask[opt["hotspot"]])
       i_con_loss = get_con_loss(inputs, outputs, opt["i_con"], mask_1d=target_id, mask_1b=binder_id)
     else:
       # Use full target if no hotspots defined
-      # print('in loss_binder, no hotspot')
       target_id = zeros.at[:tL].set(mask[:tL])
       i_con_loss = get_con_loss(inputs, outputs, opt["i_con"], mask_1d=binder_id, mask_1b=target_id)
 
@@ -108,9 +105,7 @@ class _af_loss:
     
     I = {"aatype": aatype, "batch": inputs["batch"], "seq_mask":sub(inputs["seq_mask"])}
     O = {"distogram": dgram, "structure_module": {"final_atom_positions": atoms}}
-    # print('in loss partial, before get_rmsd_loss')
     aln = get_rmsd_loss(I, O, copies=copies)
-    # jax.debug.print('in loss partial, after  aln["rmsd"] {}', aln["rmsd"])
 
     # supervised losses
     aux["losses"].update({
@@ -130,9 +125,7 @@ class _af_loss:
     # Combined motif loss: weighted geometric mean of scores (higher=better), converted to loss (lower=better)
     # rmsd_scale controls the midpoint where score=0.5 (default 3.0Å)
     # Using sigmoid-like 1/(1+(rmsd/scale)^2) for smoother gradient landscape
-    rmsd_scale = opt.get("rmsd_scale", 3.0)  # increased from 1.5 for smoother landscape
-    # jax.debug.print('rmsd_scale in loss partial: {}', rmsd_scale)
-    # rmsd_scale = opt.get("rmsd_scale", 1.5)
+    rmsd_scale = opt.get("rmsd_scale", 3.0) 
     
     # Convert to scores where 1 = good, 0 = bad
     # Sigmoid-like: 1/(1+(x/scale)^2) - smoother than exp(-x/scale)
@@ -148,8 +141,6 @@ class _af_loss:
         jnp.power(rmsd_score + eps, w_rmsd) * jnp.power(pae_score + eps, w_pae),
         1.0 / (w_rmsd + w_pae)
     )
-    # combined_score = jnp.sqrt(rmsd_score * pae_score + eps)
-    # #combined_score = rmsd_score * pae_score
     
     # Convert back to loss: 0 when both good, →1 when either bad
     aux["losses"]["motif_combined"] = 1.0 - combined_score
@@ -174,11 +165,6 @@ class _af_loss:
 
       # sc_rmsd
       aln = _get_sc_rmsd_loss(true_pos, pred_pos, self._sc["pos"])
-      # print('in loss partial, sc_rmsd', aln["rmsd"])
-      # jax.debug.print('in loss partial, _sc pos: {}', self._sc["pos"])
-      # jax.debug.print('in loss partial, pos: {}', pos)
-      # jax.debug.print('in loss partial, true_pos: {}', true_pos)
-      # jax.debug.print('in loss partial, sc_rmsd: {}', aln["rmsd"])
       aux["losses"]["sc_rmsd"] = aln["rmsd"]
       
       # sc_fape
@@ -203,19 +189,16 @@ class _af_loss:
   def _loss_partial_binder(self, inputs, outputs, aux): 
     # binder
     opt = inputs["opt"]
-    pos = opt["pos"] #from partial
+    pos = opt["pos"]
     mask = inputs["seq_mask"]
-    # print('mask beginning',mask,mask.shape)
     zeros = jnp.zeros_like(mask)
     tL,bL = self._target_len, self._binder_len
     binder_id = zeros.at[-bL:].set(mask[-bL:])
     if "hotspot" in opt and opt["hotspot"] is not None and len(opt["hotspot"]) > 0:
-      # print('in loss partial_binder, hotspot',opt["hotspot"])
       # Use hotspots if they are defined and non-empty
       target_id = zeros.at[opt["hotspot"]].set(mask[opt["hotspot"]])
       i_con_loss = get_con_loss(inputs, outputs, opt["i_con"], mask_1d=target_id, mask_1b=binder_id)
     else:
-      # print('in loss partial_binder, no hotspot')
       # Use full target if no hotspots defined
       target_id = zeros.at[:tL].set(mask[:tL])
       i_con_loss = 0.0 #get_con_loss(inputs, outputs, opt["i_con"], mask_1d=binder_id, mask_1b=target_id)
@@ -231,23 +214,13 @@ class _af_loss:
     
     I = {"aatype": aatype, "batch": inputs["batch"], "seq_mask":inputs["seq_mask"]} #sub(inputs["seq_mask"])
     O = {"distogram": dgram, "structure_module": {"final_atom_positions": atoms}}
-    # print('I,O',I['aatype'].shape,O['structure_module']['final_atom_positions'].shape)
     aln = get_rmsd_loss(I, O) #inputs, outputs #, L=tL, include_L=False
-    # print('rmsd_loss aln',aln)
     align_fn = aln["align"]
-    
-    # compute cce of binder + interface
-    # print('aatype',aatype, inputs["aatype"], aatype.shape)
-    # print('seq_mask', I["seq_mask"])
-    #cce = get_dgram_loss(I, O, aatype=aatype, return_mtx=True) #inputs, outputs
-
-    # compute fape
-    #fape = get_fape_loss(I, O, clamp=opt["fape_cutoff"], return_mtx=True) #inputs, outputs
 
     aux["losses"].update({
       "rmsd":      aln["rmsd"], # also in partial
-      "dgram_cce": get_dgram_loss(I, O, aatype=aatype, return_mtx=False),#cce[-bL:].sum()  / (mask[-bL:].sum() + 1e-8),
-      "fape":      get_fape_loss(I, O, clamp=opt["fape_cutoff"], return_mtx=False) #fape[-bL:].sum() / (mask[-bL:].sum() + 1e-8)
+      "dgram_cce": get_dgram_loss(I, O, aatype=aatype, return_mtx=False),
+      "fape":      get_fape_loss(I, O, clamp=opt["fape_cutoff"], return_mtx=False)
     })
 
     # PAE loss on motif residues (motif to all residues)
@@ -305,7 +278,6 @@ class _af_loss:
 
     # sidechain specific losses
     if self._args["use_sidechains"]:
-      # print('in use sidechains')
       struct = outputs["structure_module"]
       pred_pos = sub(struct["final_atom14_positions"])
       true_pos = all_atom.atom37_to_atom14(inputs["batch"]["all_atom_positions"], self._sc["batch"])
@@ -515,7 +487,6 @@ def get_ipsae(outputs, mask_1d=None, mask_1b=None, mask_2d=None, pae_cutoff=15.0
   ipsae_21 = jnp.sum(ptm_scores_21_weighted) / soft_max(1.0, jnp.sum(valid_weight_21))
   
   # Return min of asymmetric scores using soft minimum (fully differentiable)
-  # jax.debug.print("ipsae (traced) = {}", soft_min(ipsae_12, ipsae_21))
   return soft_min(ipsae_12, ipsae_21)
 
 def get_pae(outputs):
@@ -529,8 +500,6 @@ def get_pae(outputs):
 def get_ptm(inputs, outputs, interface=False, crop_indices=None):
   pae = {"residue_weights":inputs["seq_mask"],
          **outputs["predicted_aligned_error"]}
-  # print('in get_ptm, inputs["seq_mask"]',inputs["seq_mask"].shape)
-  # print('in get_ptm, outputs["predicted_aligned_error"]',outputs["predicted_aligned_error"]['logits'].shape)
   if interface:
     if "asym_id" not in pae:
       pae["asym_id"] = inputs["asym_id"]
@@ -579,8 +548,6 @@ def get_ipsae_loss(outputs, mask_1d=None, mask_1b=None, mask_2d=None, use_contac
   """Calculate ipSAE loss (1 - ipSAE score, so lower is better)."""
   ipsae_score = get_ipsae(outputs, mask_1d=mask_1d, mask_1b=mask_1b, mask_2d=mask_2d, 
                           use_contact_map=use_contact_map, contact_cutoff=contact_cutoff, return_max=True)
-  # jax.debug.print("ipsae_score = {}", ipsae_score)
-  # jax.debug.print("ipsae_loss = {}", 1.0 - ipsae_score)
   return 1.0 - ipsae_score
 
 def get_pae_loss(outputs, mask_1d=None, mask_1b=None, mask_2d=None):
@@ -591,8 +558,6 @@ def get_pae_loss(outputs, mask_1d=None, mask_1b=None, mask_2d=None):
   if mask_1b is None: mask_1b = jnp.ones(L)
   if mask_2d is None: mask_2d = jnp.ones((L,L))
   mask_2d = mask_2d * mask_1d[:,None] * mask_1b[None,:]
-  # jax.debug.print("in get_pae_loss, p: {}", p)
-  # jax.debug.print("in get_pae_loss, mask_2d: {}", mask_2d)
   return mask_loss(p, mask_2d)
 
 def get_con_loss(inputs, outputs, con_opt,
@@ -776,12 +741,6 @@ def get_rmsd_loss(inputs, outputs, L=None, include_L=True, copies=1):
   batch = inputs["batch"]
   true = batch["all_atom_positions"][:,1]
   pred = outputs["structure_module"]["final_atom_positions"][:,1]
-  # jax.debug.print('in get_rmsd_loss, true: {}', true)
-  # jax.debug.print('in get_rmsd_loss, pred: {}', pred)
-  # jax.debug.print('in get_rmsd_loss, inputs["seq_mask"]: {}', inputs["seq_mask"])
-  # jax.debug.print('in get_rmsd_loss, inputs["seq_mask"].shape: {}', inputs["seq_mask"].shape)
-  # jax.debug.print('in get_rmsd_loss, batch["all_atom_mask"]: {}', batch["all_atom_mask"])
-  # jax.debug.print('in get_rmsd_loss, batch["all_atom_mask"].shape: {}', batch["all_atom_mask"].shape)
   weights = jnp.where(inputs["seq_mask"],batch["all_atom_mask"][:,1],0)
   return _get_rmsd_loss(true, pred, weights=weights, L=L, include_L=include_L, copies=copies)
 

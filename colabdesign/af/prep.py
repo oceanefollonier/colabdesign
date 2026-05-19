@@ -343,10 +343,8 @@ class _af_prep:
       self.opt["pos"] = self._pdb["pos"] = np.arange(self._pdb["len"])
       self._pos_info = {"length":np.array([self._pdb["len"]]), "pos":self._pdb["pos"]}    
     else:
-      # jax.debug.print('in prep partial, pos is: {}', pos)
       self._pos_info = prep_pos(pos, **self._pdb["idx"])
       self.opt["pos"] = self._pdb["pos"] = self._pos_info["pos"]
-      # jax.debug.print('in prep partial, self.opt["pos"] is: {}', self.opt["pos"])
 
     if homooligomer and chain is not None and copies == 1:
       copies = len(chain.split(","))
@@ -394,11 +392,8 @@ class _af_prep:
     # configure sidechains
     self._args["use_sidechains"] = use_sidechains
     if use_sidechains:
-      # print('in prep partial, use_sidechains is true')
       self._sc = {"batch":prep_inputs.make_atom14_positions(self._inputs["batch"]),
                   "pos":get_sc_pos(self._wt_aatype, atoms_to_exclude)}
-      # print('in prep partial, self._sc["pos"]', self._sc["pos"])
-      # print('in prep partial, self._wt_aatype', self._wt_aatype.shape,self._wt_aatype)
       self.opt["weights"].update({"sc_rmsd":0.1, "sc_fape":0.1})
       self.opt["fix_pos"] = np.arange(self.opt["pos"].shape[0])      
       self._wt_aatype_sub = self._wt_aatype
@@ -462,7 +457,6 @@ class _af_prep:
     -ignore_missing=True - skip positions that have missing density (no CA coordinate)
     ---------------------------------------------------
     '''
-    # print('in _prep_partial_binder')
     redesign = binder_chain is not None
     rm_binder = bool(new_pos) #not kwargs.pop("use_binder_template", not rm_binder)
     partial_loops = kwargs.pop("partial_loops_len", None) #new
@@ -470,20 +464,13 @@ class _af_prep:
     #self._args.update({"redesign":redesign})
 
     # get pdb info
-    # print(f'[DEBUG] Before kwargs.pop: target_chain = {target_chain}, "chain" in kwargs = {"chain" in kwargs}')
     if "chain" in kwargs:
-        # print(f'[DEBUG] kwargs["chain"] = {kwargs["chain"]}')
         pass
     target_chain = kwargs.pop("chain",target_chain) # backward comp
-    # print(f'[DEBUG] After kwargs.pop: target_chain = {target_chain}')
     chains = f"{target_chain},{binder_chain}" if (redesign and not target_chain == binder_chain) else target_chain
-    # print(f'[DEBUG] chains to pass to prep_pdb = {chains}, binder_len = {binder_len}')
     im = [True] * len(target_chain.split(","))
     if redesign: im += [ignore_missing] * len(binder_chain.split(","))
-    # print(f'[DEBUG] ignore_missing list = {im}')
-    # print('before im',offset, binder_len, chains)
     offset = 0
-    # print(f'[DEBUG _prep_partial_binder] Loading chains: {chains}, target_chain={target_chain}, binder_chain={binder_chain}, redesign={redesign}')
     self._pdb = prep_pdb(pdb_filename, chain=chains, ignore_missing=im,lengths=binder_len,offsets=offset)
 
     # Re-scatter binder motifs to insert loop gaps: loop1 | motif1 | loop2 | motif2 | ... # NEW!!
@@ -507,32 +494,22 @@ class _af_prep:
         bi = np.where(self._pdb["idx"]["chain"] == binder_chain)[0]
         old_res = self._pdb["idx"]["residue"][bi].copy(); self._pdb["idx"]["residue"][bi] = -1
         self._pdb["idx"]["residue"][bi[tgt]] = old_res[src]
-        # print(f'Re-scattered binder: loops={partial_loops}, motif_lens={motif_lens}, tgt={tgt.tolist()}')
 
     res_idx = self._pdb["residue_index"] # to check if ok!!
-    # print('res_idx',res_idx)
     # get [pos]itions of interests
     if pos is None:
       self.opt["pos"] = self._pdb["pos"] = np.arange(self._pdb["len"])
       self._pos_info = {"length":np.array([self._pdb["len"]]), "pos":self._pdb["pos"]}    
     else:
       self._pos_info = prep_pos(pos, **self._pdb["idx"])
-      # print('self._pos_info',self._pos_info, len(self._pos_info))
       self.opt["pos"] = self._pdb["pos"] = self._pos_info["pos"]
-      # print('self.opt["pos"]',self.opt["pos"],len(self.opt["pos"]))
 
-
-    # print(f'[DEBUG] target_chain = {target_chain}, binder_chain = {binder_chain}')
-    # print(f'[DEBUG] target_chain.split(",") = {target_chain.split(",")}')
-    # print(f'[DEBUG] self._pdb["idx"]["chain"] unique values = {np.unique(self._pdb["idx"]["chain"])}')
-    # print(f'[DEBUG] self._pdb["idx"]["chain"] counts = {[(c, (self._pdb["idx"]["chain"] == c).sum()) for c in target_chain.split(",")]}')
     self._target_len = sum([(self._pdb["idx"]["chain"] == c).sum() for c in target_chain.split(",")])
     self._init_target_len = self._target_len
     if binder_len is None:
       self._binder_len = sum([(self._pdb["idx"]["chain"] == c).sum() for c in binder_chain.split(",")])
     else:
       self._binder_len = binder_len
-    # print(f'[DEBUG] self._target_len = {self._target_len}, self._binder_len = {self._binder_len}')
 
     # gather hotspot info
     if hotspot is not None:
@@ -541,40 +518,28 @@ class _af_prep:
         self.opt["crop_target_hotspot_residues"] = _compute_crop_hotspot_residues(self.opt["hotspot"], self.opt["crop_indices"])
         self._args["use_initial_guess"] = True
     
-    # print('self_len', self._binder_len+self._target_len, self._binder_len,self._target_len)
-    self._len = self._binder_len+self._target_len if not target_chain == binder_chain else self._binder_len#to check!!!
+    self._len = self._binder_len+self._target_len if not target_chain == binder_chain else self._binder_len
     self._lengths = [self._target_len, self._binder_len]
-    # print(f'[DEBUG _prep_partial_binder] Lengths: target_len={self._target_len}, binder_len={self._binder_len}, _len={self._len}, _lengths={self._lengths}')
     
     # binder redesign
-    # print('self.opt["pos"] here',self.opt["pos"], len(self.opt["pos"]))
-    self._wt_aatype = self._pdb["batch"]["aatype"][self.opt["pos"]] #[self._target_len:]
-    # print('self._wt_aatype',self._wt_aatype)
-    # print('self._pdb["batch"]["aatype"]',self._pdb["batch"]["aatype"],self._pdb["batch"]["aatype"].shape)
+    self._wt_aatype = self._pdb["batch"]["aatype"][self.opt["pos"]]
     # Use motif_combined (product of normalized rmsd and motif_pae) instead of separate losses
     # Set motif_pae to 0 since it's captured in motif_combined
     # Product compresses values (0.5*0.5=0.25), so weight is higher to compensate
-    self.opt["weights"].update({"dgram_cce":0.0, "rmsd":0.0, "fape":0.0, "ipsae":0.0, #loss2 = rmsd: 2, fape: 1 #"ipsae":1.0 -> now 0.0 for ramp test of adding features
-                                  "con":0.0, "i_con":1.0, "i_con_hotspot":0.0, "i_pae":0.0, #con=1.0 like in partial #i_con_hotspot:2.0
-                                  "motif_pae":0.0, "motif_combined":10.0}) #"motif_pae":0.0, "motif_combined":15.0 -> now 0.0 for ramp test of adding features
-    self.opt["weights"].update({"sc_rmsd":0.1, "sc_fape":0.1}) #"sc_rmsd":0.1, "sc_fape":0.1 -> now 0.0 for ramp test of adding features
-    
+    self.opt["weights"].update({"dgram_cce":0.0, "rmsd":0.0, "fape":0.0, "ipsae":0.0,
+                                  "con":0.0, "i_con":1.0, "i_con_hotspot":0.0, "i_pae":0.0,
+                                  "motif_pae":0.0, "motif_combined":10.0})
+    self.opt["weights"].update({"sc_rmsd":0.1, "sc_fape":0.1})
+
     # configure input features
-    # print(f'[DEBUG] self._lengths = {self._lengths}, sum = {sum(self._lengths)}')
     self._inputs = self._prep_features(num_res=sum(self._lengths), num_seq=1)
-    # print(f'[DEBUG] After _prep_features, self._inputs["msa_feat"].shape = {self._inputs["msa_feat"].shape}')
     self._inputs["residue_index"] = res_idx
-    # print('self._inputs["residue_index"]',len(self._inputs["residue_index"]),self._inputs["residue_index"])
-    # print('self._pdb["batch"] aatype before',self._pdb["batch"]['aatype'],self._pdb["batch"]['aatype'].shape)
-    self._inputs["batch"] = self._pdb["batch"] #jax.tree_map(lambda x:x[self._pdb["pos"]], self._pdb["batch"]) #
-    # print('self._inputs["batch"] aatype after',self._inputs["batch"]['aatype'],self._inputs["batch"]['aatype'].shape)
+    self._inputs["batch"] = self._pdb["batch"]
     self._inputs.update(get_multi_id(self._lengths))
-    # print(f'[DEBUG _prep_partial_binder] After setting inputs: num_res={sum(self._lengths)}, batch["aatype"] shape={self._inputs["batch"]["aatype"].shape}, residue_index shape={self._inputs["residue_index"].shape}')
-    # print('after inputs',self._inputs)
-        # configure sidechains
+      
+    # configure sidechains
     self._args["use_sidechains"] = use_sidechains
     if use_sidechains:
-      # print('in use sidechains')
       self._sc = {"batch":prep_inputs.make_atom14_positions(self._inputs["batch"]),
                   "pos":get_sc_pos(self._wt_aatype, atoms_to_exclude)}
       self.opt["weights"].update({"sc_rmsd":0.1, "sc_fape":0.1})
@@ -582,27 +547,19 @@ class _af_prep:
       self._wt_aatype_sub = self._wt_aatype
       
     elif fix_pos is not None and fix_pos != "":
-      # print('[DEBUG] Processing fix_pos in _prep_partial_binder')
       sub_fix_pos = []
       sub_i = []
       pos = self.opt["pos"].tolist()
-      # print(f'[DEBUG] self.opt["pos"] length: {len(pos)}, first 10: {pos[:10] if len(pos) >= 10 else pos}')
       fix_pos_indices = prep_pos(fix_pos, **self._pdb["idx"])["pos"]
-      # print(f'[DEBUG] fix_pos_indices length: {len(fix_pos_indices)}, first 10: {fix_pos_indices[:10] if len(fix_pos_indices) >= 10 else fix_pos_indices}')
       for i in fix_pos_indices:
         if i in pos:
           sub_i.append(i)
           idx_in_pos = pos.index(i)
-          # print(f'[DEBUG] Original index {i} maps to cropped index {idx_in_pos}')
           sub_fix_pos.append(idx_in_pos)
         else:
-          # print(f'[DEBUG] Skipping index {i} - not in cropped pos')
           pass
-      # print(f'[DEBUG] Final sub_fix_pos length: {len(sub_fix_pos)}, max value: {max(sub_fix_pos) if sub_fix_pos else "N/A"}')
       self.opt["fix_pos"] = np.array(sub_fix_pos)
       self._wt_aatype_sub = self._pdb["batch"]["aatype"][sub_i]
-      # print(f'[DEBUG] self.opt["fix_pos"] shape: {self.opt["fix_pos"].shape}, max: {self.opt["fix_pos"].max() if len(self.opt["fix_pos"]) > 0 else "N/A"}')
-      # print(f'[DEBUG] self._wt_aatype_sub shape: {self._wt_aatype_sub.shape}')
     elif kwargs.pop("fix_seq",False):
       self.opt["fix_pos"] = np.arange(self.opt["pos"].shape[0])
       self._wt_aatype_sub = self._wt_aatype
@@ -614,24 +571,16 @@ class _af_prep:
               "rm_template_seq":{"target":rm_target_seq,"binder":rm_binder_seq},
               "rm_template_sc": {"target":rm_target_sc, "binder":rm_binder_sc}
              }
-    # print('rm_opt',rm_opt)
     for n,x in rm_opt.items():
       rm[n] = np.full(L,False)
-      # print('rm[n]',len(n),n,len(x),x,len(rm[n]),rm[n])
-      # print('x',x)
       for m,y in x.items():
-        # print('m,y',m,y)
         if isinstance(y,str):
-          # print('isinstance y,str', y)
-          #print('prep_pos(y,**self._pdb["idx"])["pos"]',prep_pos(y,**self._pdb["idx"])["pos"])
           rm[n][prep_pos(y,**self._pdb["idx"])["pos"]] = True
         else:
-          # print('in else isinstance str')
           if m == "target": rm[n][:T] = y
           if m == "binder": rm[n][T:] = y
-    # print('rm',rm)
+    
     # set template [opt]ions
-    # print('rm_template_ic',rm_template_ic)
     self.opt["template"]["rm_ic"] = rm_template_ic
     self._inputs.update(rm)
 
@@ -646,8 +595,6 @@ class _af_prep:
       self._pdb["idx"]["residue"][binder_mask] = np.arange(1, binder_mask.sum() + 1)
 
     self._prep_model(**kwargs)
-
-    # print('in prep, self.opt',self.opt['weights'])
 
 #######################
 # utils
@@ -686,12 +633,9 @@ def prep_pdb(pdb_filename, chain=None,
   full_lengths = []
 
   # go through each defined chain 
-  # print(f'[DEBUG prep_pdb] Input chains before set/sort: {chains}')
   chains = list(set(chains))
   chains.sort() 
-  # print(f'[DEBUG prep_pdb] Chains after set/sort: {chains}, lengths={lengths}, offsets={offsets}')
   for n,chain in enumerate(chains):
-    # print(f'[DEBUG prep_pdb] Processing chain {n}: {chain}')
     pdb_str = pdb_to_string(pdb_filename, chains=chain, models=[1])
     protein_obj = protein.from_pdb_string(pdb_str, chain_id=chain)
     batch = {'aatype': protein_obj.aatype,
@@ -702,9 +646,6 @@ def prep_pdb(pdb_filename, chain=None,
     cb_feat = add_cb(batch) # add in missing cb (in the case of glycine)
     
     im = ignore_missing[n] if isinstance(ignore_missing,list) else ignore_missing
-    # print('in prep_pdb, ignore_missing',im)
-    # print('in prep_pdb, lengths',lengths)
-    # print('in prep_pdb, offsets',offsets)
     if im:
       r = batch["all_atom_mask"][:,0] == 1
       batch = jax.tree_util.tree_map(lambda x:x[r], batch)
@@ -736,7 +677,6 @@ def prep_pdb(pdb_filename, chain=None,
     residue_idx.append(batch.pop("residue_index"))
     chain_idx.append([chain] * len(residue_idx[-1]))
     full_lengths.append(len(residue_index))
-    # print(f'[DEBUG prep_pdb] Chain {chain}: residue_index length = {len(residue_index)}, batch aatype shape = {o[-1]["batch"]["aatype"].shape}')
 
   # concatenate chains
   o = jax.tree_util.tree_map(lambda *x:np.concatenate(x,0),*o)
@@ -772,7 +712,6 @@ def make_fixed_size(feat, num_res, num_seq=1, num_templates=1):
 
 def get_sc_pos(aa_ident, atoms_to_exclude=None):
   '''get sidechain indices/weights for all_atom14_positions'''
-  # print('in begin get_sc_pos, aa_ident', len(aa_ident), aa_ident)
   # decide what atoms to exclude for each residue type
   a2e = {}
   for r in resname_to_idx:
@@ -805,7 +744,6 @@ def get_sc_pos(aa_ident, atoms_to_exclude=None):
   w = np.array([1/(n == N).sum() for n in N])
   w_na = np.array([1/(n == N_non_amb).sum() for n in N_non_amb])
   w, w_na = w/w.sum(), w_na/w_na.sum()
-  # print('in get_sc_pos, pos',len(pos),pos.shape, pos, 'atoms_to_exclude', atoms_to_exclude)
   return {"pos":pos, "pos_alt":pos_alt, "non_amb":non_amb,
           "weight":w, "weight_non_amb":w_na[:,None]}
 

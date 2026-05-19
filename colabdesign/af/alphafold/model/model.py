@@ -37,16 +37,12 @@ class RunModel:
 
     self.config = config
     self.params = params
-
-    # print('in RunModel, crop', self.config.model.embeddings_and_evoformer.crop)
     
     self.mode = recycle_mode
     if self.mode is None: self.mode = []
 
     def _forward_fn(batch):
       if use_multimer:
-        # print('running forward fun of multimer, returning representations', return_representations)
-        # print('config', self.config.model.embeddings_and_evoformer.crop)
         model = modules_multimer.AlphaFold(self.config.model)
       else:
         model = modules.AlphaFold(self.config.model)
@@ -59,10 +55,8 @@ class RunModel:
     
     def apply(params, key, feat):
       if "prev" in feat:
-        # print('in apply, prev in feat', 'prev_pos' in feat["prev"], feat["prev"].keys())
         prev = feat["prev"]      
       else:
-        # print('in apply, no prev in feat, creating prev')
         L = feat['aatype'].shape[0]
         prev = {'prev_msa_first_row': np.zeros([L,256]),
                 'prev_pair': np.zeros([L,L,128]),
@@ -76,12 +70,10 @@ class RunModel:
       ################################
       if self.config.model.num_recycle:
         # use scan()
-        # print('RunModel before scan, prev', prev.keys())
         def loop(prev, sub_key):
           feat["prev"] = prev
           results = self.apply_fn(params, sub_key, feat)
           prev = results["prev"]
-          # print('RunModel after apply_fn, results', results.keys())
           if "backprop" not in self.mode:
               prev = jax.lax.stop_gradient(prev)
           return prev, results
@@ -89,14 +81,12 @@ class RunModel:
         keys = jax.random.split(key, self.config.model.num_recycle + 1)
         _, o = jax.lax.scan(loop, prev, keys)
         results = jax.tree_util.tree_map(lambda x:x[-1], o)
-        # print('RunModel after scan, results', results.keys())
         if "add_prev" in self.mode:
           for k in ["distogram","predicted_lddt","predicted_aligned_error"]:
             if k in results:
               results[k]["logits"] = o[k]["logits"].mean(0)
       
       else:
-        # print('in RunModel else, single pass')
         # single pass
         results = self.apply_fn(params, key, feat)
       

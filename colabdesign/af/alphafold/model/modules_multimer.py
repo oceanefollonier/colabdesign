@@ -73,32 +73,23 @@ def crop_sizes(input_dict, old_dim, array_slice, verbose=False):
   Returns:
     Dict of cropped tensors.
   """
-  # print('beginning crop dict', old_dim)
   for k in input_dict:
-    # print(f'in begin input_dict {k}')
     if isinstance(input_dict[k], dict):
       for kk in input_dict[k]:
         if isinstance(input_dict[k][kk], dict):
           for kkk in input_dict[k][kk]:
             indices_to_change = [x for x, y in enumerate(input_dict[k][kk][kkk].shape) if y == old_dim]
             if len(indices_to_change) == 0:
-              # print('in input_dict subsubdict nothing to change')
               input_dict[k][kk][kkk] = input_dict[k][kk][kkk]
             else:
               print('STILL DO TO input_dict SUBSUBDICT',indices_to_change)
         else:
-          # print(f'input_dict {k}, {kk} shape: {input_dict[k][kk].shape}')
           if kk == 'crop' or kk == 'crop_indices' or kk == 'crop_target_hotspot_residues':
             continue
-          # print('in crop_sizes, input_dict[k][kk]', k, kk,input_dict[k][kk])
           indices_to_change = [x for x, y in enumerate(input_dict[k][kk].shape) if y == old_dim]
-          # print('in input_dict subdict indices',indices_to_change)
           if len(indices_to_change) == 0:
-            # print('in input_dict subdict nothing to change')
             input_dict[k][kk] = input_dict[k][kk]
           elif len(indices_to_change) == 1:
-            # jax.debug.print(f'verbose in {k}, {kk} indices shape {input_dict[k][kk].shape} subdict')
-            # jax.debug.print("vv: {}", input_dict[k][kk])
             if indices_to_change[0] == 0:
               if len(input_dict[k][kk].shape) == 1:
                 input_dict[k][kk] = input_dict[k][kk][array_slice]
@@ -130,11 +121,7 @@ def crop_sizes(input_dict, old_dim, array_slice, verbose=False):
         input_dict[k] = input_dict[k]
         continue
       indices_to_change = [x for x, y in enumerate(input_dict[k].shape) if y == old_dim]
-      # print(f'in input_dict indices, {k}',indices_to_change)
       if len(indices_to_change) == 1:
-        # if verbose:
-        #   jax.debug.print(f'verbose in input_dict {k} shape: {input_dict[k].shape}')
-        #   jax.debug.print("v: {}", input_dict[k])
         if indices_to_change[0] == 0:
           if len(input_dict[k].shape) == 1:
             input_dict[k] = input_dict[k][array_slice]
@@ -168,9 +155,7 @@ def crop_sizes(input_dict, old_dim, array_slice, verbose=False):
         else:
           print('still to do with more than 2 indices', indices_to_change)
       else:
-        # print('nothing to change')
         input_dict[k] = input_dict[k]
-  # print('finished crop dict', input_dict)
   return input_dict 
 
 class AlphaFoldIteration(hk.Module):
@@ -192,9 +177,6 @@ class AlphaFoldIteration(hk.Module):
                safe_key=None):
 
     # Compute representations for each MSA sample and average.
-    # print('batch opt contains crop before evo', 'crop' in batch['opt'], batch['opt']['crop'])
-    # print('config contains crop before evo?', self.config.embeddings_and_evoformer.crop)
-    # self.config.embeddings_and_evoformer.crop = batch['opt']['crop']
     embedding_module = EmbeddingsAndEvoformer(
         self.config.embeddings_and_evoformer, self.global_config)
     
@@ -202,21 +184,7 @@ class AlphaFoldIteration(hk.Module):
     start_time = time.time()
     representations = embedding_module(batch, safe_key=safe_subkey)
     evo_time = time.time() - start_time
-    # print('in af iterationrepresentations', representations['pair'].shape)
-    # print('saving representations pair')
-    # jnp.save('/scicore/home/schwede/follon0000/BindCraft/example/PDL1_notcropped_predict/representations_pair.npy', representations['pair'])
-    # print('batch opt contains crop', 'crop' in batch['opt'])
-    # print('in af iteration, batch', batch.keys())
-    # slice_size = jnp.concatenate([jnp.arange(35,50),jnp.arange(92,111)], axis=0).shape[0]
-    # print('decision2',batch['bias'].shape[0]+slice_size, batch['msa_feat'].shape[1], self.config.embeddings_and_evoformer.crop, batch['bias'].shape[0]+slice_size!=batch['msa_feat'].shape[1])
     if self.config.embeddings_and_evoformer.crop and self.config.embeddings_and_evoformer.crop_indices!=[]:
-    # if self.config.embeddings_and_evoformer.crop: #batch['opt']['crop']:
-      # print('cropping,',batch['seq_mask'].shape)
-      # array_slice = jnp.concatenate([jnp.arange(0,3),jnp.arange(12,24),jnp.arange(37,56),jnp.arange(61,70),jnp.arange(86,123),jnp.arange(124,143),jnp.arange(146,150),jnp.arange(151,154),jnp.arange(165,175),jnp.arange(184,237),jnp.arange(258,270),jnp.arange(289,291),jnp.arange(292,294),jnp.arange(296,298),jnp.arange(312,361),jnp.arange(371,376),jnp.arange(422,442),jnp.arange(454,468),jnp.arange(494,batch['seq_mask'].shape[0])], axis=0)
-      # print('cropping, array_slice', array_slice.shape)
-      # # array_slice = jnp.concatenate([jnp.arange(0,3),jnp.arange(12,24),jnp.arange(37,56),jnp.arange(61,70),jnp.arange(86,123),jnp.arange(124,143),jnp.arange(146,150),jnp.arange(151,154),jnp.arange(165,175),jnp.arange(184,237),jnp.arange(258,270),jnp.arange(289,291),jnp.arange(292,294),jnp.arange(296,298),jnp.arange(312,361),jnp.arange(371,376),jnp.arange(422,436),jnp.arange(448,462),jnp.arange(488,batch['seq_mask'].shape[0])], axis=0)
-      # array_slice = jnp.concatenate([jnp.arange(35,50), jnp.arange(92,111),jnp.arange(115,batch['msa_mask'].shape[1])], axis=0)
-      # Build array_slice using crop_indices from config
       crop_indices = self.config.embeddings_and_evoformer.crop_indices
       to_concat = []
       for i in range(0, len(crop_indices) - 1, 2):
@@ -226,19 +194,10 @@ class AlphaFoldIteration(hk.Module):
       array_slice = jnp.concatenate(to_concat, axis=0)
       if batch['bias'].shape[0]+seq_len!=batch['msa_feat'].shape[1]:
         start_time = time.time()
-        # print('in AlphaFoldIteration, before crop, batch["all_atom_positions"].shape', batch['all_atom_positions'].shape) #
-        # print('cropping size', batch['msa_mask'].shape[1])
         batch = crop_sizes(batch, batch['msa_mask'].shape[1], array_slice)
-        # print('in AlphaFoldIteration, after crop, batch["all_atom_positions"].shape', batch['all_atom_positions'].shape)
         batch_crop_time = time.time() - start_time
     else:
-      # print('not cropping')
       batch_crop_time = 0.0
-
-    # if 'initial_atom_pos' in batch:
-    #   print('in AlphaFoldIteration, after crop, batch["initial_atom_pos"].shape', batch['initial_atom_pos'].shape)
-    # else:
-    #   print('in AlphaFoldIteration, no initial_atom_pos in batch')
 
     self.representations = representations
     self.batch = batch
@@ -336,7 +295,6 @@ class AlphaFold(hk.Module):
       safe_key=None):
 
     c = self.config
-    # print('in AlphaFold, c.crop', c.embeddings_and_evoformer.crop)
     impl = AlphaFoldIteration(c, self.global_config)
 
     if safe_key is None:
@@ -348,28 +306,19 @@ class AlphaFold(hk.Module):
     num_res = batch['aatype'].shape[0]
     
     def get_prev(ret):
-      # print('in get_prev, ret structure_module', 'final_atom_positions' in ret['structure_module'], ret['structure_module']['final_atom_positions'].shape,ret['structure_module'].keys())
-      # jax.debug.print('jax get_prev final_atom_positions: {}',ret['structure_module']['final_atom_positions'][0][0])
       new_prev = {
           'prev_pos': ret['structure_module']['final_atom_positions'],
           'prev_msa_first_row': ret['representations']['msa_first_row'],
-          'prev_pair': ret['representations']['pair'],
-          # 'prev_evoformer_input_msa': ret['representations']['evoformer_input_msa'],
-          # 'prev_evoformer_input_pair': ret['representations']['evoformer_input_pair'],
-          # 'prev_evoformer_masks_msa': ret['representations']['evoformer_masks_msa'],
-          # 'prev_evoformer_masks_pair': ret['representations']['evoformer_masks_pair'],
+          'prev_pair': ret['representations']['pair']
       }
       return new_prev
 
     def apply_network(prev, safe_key):
-      # print('in apply_network, prev', batch.keys(), prev.keys())
       recycled_batch = {**batch, **prev}
-      # print('recycled_batch', recycled_batch.keys())
       return impl(
           batch=recycled_batch,
           safe_key=safe_key)
     
-    # jax.debug.print('jax batch prev: {}',batch['prev']['prev_pos'][0][0])
     ret = apply_network(prev=batch.pop("prev"), safe_key=safe_key)
     ret["prev"] = get_prev(ret)
     
@@ -478,221 +427,131 @@ class EmbeddingsAndEvoformer(hk.Module):
 
     output = {}
     with utils.bfloat16_context():
-
-      # print('in evoformer, batch', batch.keys(), batch['batch'].keys())
-      # print('rm_template_sc', batch['rm_template_sc'], batch['rm_template_sc'].shape)
-      # print('rm_template_sc count', sum(batch['rm_template_sc']))
-      # print('in evoformer, batch', batch['msa_feat'].shape, batch['msa_mask'].shape, batch['msa_row_mask'].shape, batch['extra_msa'].shape, batch['extra_msa_mask'].shape)
-      # print('in evoformer, batch', batch['prev_pair'].shape, batch['prev_msa_first_row'].shape, batch['batch']['all_atom_mask'].shape)
-      # for key in batch:
-      #   if type(batch[key]) == dict:
-      #     for k in batch[key]:
-      #       print('subdict', k, batch[key][k].shape)
-      #   else:
-      #     print('not subdict', key, batch[key].shape)
-      # print(stop)
       
-      # jax_array_slice = jnp.concatenate([jnp.arange(35,50),jnp.arange(92,111),jnp.arange(115,batch['msa_feat'].shape[1])], axis=0)
-      # slice_size = jnp.concatenate([jnp.arange(35,50),jnp.arange(92,111)], axis=0).shape[0]
-      # crop_indices = c.crop_indices
-      # to_concat = []
-      # for i in range(0, len(crop_indices) - 1, 2):
-      #   to_concat.append(jnp.arange(crop_indices[i], crop_indices[i+1]))
-      # seq_len = len(jnp.concatenate(to_concat, axis=0))
-      # print('decision', c.crop, jax_array_slice.shape,batch['bias'].shape[0]+slice_size, batch['msa_feat'].shape[1], batch['bias'].shape[0]+slice_size==batch['msa_feat'].shape[1], 'prev_evoformer_input_msa' in batch)
-      if False: #'prev_evoformer_input_msa' in batch: #c.crop and batch['bias'].shape[0]+slice_size==batch['msa_feat'].shape[1] and 
-        # print('in embeddings_and_evoformer, reusing', batch['prev_evoformer_input_msa'].shape, batch['prev_evoformer_input_pair'].shape)
+      msa_feat = batch['msa_feat'].astype(dtype)
+      target_feat = jnp.pad(batch["target_feat"].astype(dtype),[[0,0],[0,1]])
+      preprocess_1d = common_modules.Linear(c.msa_channel, name='preprocess_1d')(target_feat)
+      preprocess_msa = common_modules.Linear(c.msa_channel, name='preprocess_msa')(msa_feat)
+      msa_activations = preprocess_1d[None] + preprocess_msa
+      num_msa_sequences = msa_activations.shape[0]
 
-        if len(batch['prev_msa_first_row'].shape) == 2:
-          num_msa_sequences = jnp.expand_dims(batch['prev_msa_first_row'], axis=0).shape[0] 
-        else:
-          num_msa_sequences = batch['prev_msa_first_row'].shape[0] 
+      left_single = common_modules.Linear(c.pair_channel, name='left_single')(target_feat)
+      right_single = common_modules.Linear(c.pair_channel, name='right_single')(target_feat)
+      pair_activations = left_single[:, None] + right_single[None]
+      mask_2d = batch['seq_mask'][:, None] * batch['seq_mask'][None, :]
+      mask_2d = mask_2d.astype(dtype)
 
-        prev_evoformer_input_msa = batch['prev_evoformer_input_msa']
-        prev_evoformer_input_pair = batch['prev_evoformer_input_pair']
-        prev_evoformer_masks_msa = batch['prev_evoformer_masks_msa']
-        prev_evoformer_masks_pair = batch['prev_evoformer_masks_pair']
-        # num_msa_sequences = evoformer_input['msa'].shape[0]
+      if c.recycle_pos:
+        prev_pseudo_beta = modules.pseudo_beta_fn(batch['aatype'], batch['prev_pos'], None)
+        dgram = modules.dgram_from_positions(prev_pseudo_beta, **self.config.prev_pos)
+        dgram = dgram.astype(dtype)
+        pair_activations += common_modules.Linear(c.pair_channel, name='prev_pos_linear')(dgram)
 
-        # if c.recycle_pos:
-        #   print('in evoformer recycle, recycling pos', 'prev_pos' in batch, batch['prev_pos'].shape, batch['aatype'].shape, prev_evoformer_input_pair.shape)
-        #   prev_pseudo_beta = modules.pseudo_beta_fn(batch['aatype'], batch['prev_pos'], None)
-        #   dgram = modules.dgram_from_positions(prev_pseudo_beta, **self.config.prev_pos)
-        #   dgram = dgram.astype(dtype)
-        #   prev_evoformer_input_pair += common_modules.Linear(c.pair_channel, name='prev_pos_linear')(dgram)
+      if c.recycle_features:
+        prev_msa_first_row = common_modules.LayerNorm(
+            axis=[-1],
+            create_scale=True,
+            create_offset=True,
+            name='prev_msa_first_row_norm')(batch['prev_msa_first_row']).astype(dtype)
+        
+        msa_activations = msa_activations.at[0].add(prev_msa_first_row)
 
-        # if c.recycle_features:
-        #   prev_msa_first_row = common_modules.LayerNorm(
-        #       axis=[-1],
-        #       create_scale=True,
-        #       create_offset=True,
-        #       name='prev_msa_first_row_norm')(batch['prev_msa_first_row']).astype(dtype)
-          
-        #   print('in evoformer recycle, recycling features', 'prev_msa_first_row' in batch, batch['prev_msa_first_row'].shape, prev_evoformer_input_msa.shape)
-        #   prev_evoformer_input_msa = prev_evoformer_input_msa.at[0].add(prev_msa_first_row)
+        pair_activations += common_modules.LayerNorm(
+            axis=[-1],
+            create_scale=True,
+            create_offset=True,
+            name='prev_pair_norm')(batch['prev_pair']).astype(dtype)
 
-        #   prev_evoformer_input_pair += common_modules.LayerNorm(
-        #       axis=[-1],
-        #       create_scale=True,
-        #       create_offset=True,
-        #       name='prev_pair_norm')(batch['prev_pair']).astype(dtype)
+      if c.max_relative_idx:
+        pair_activations += self._relative_encoding(batch)
 
-        evoformer_input = {
-            'msa': prev_evoformer_input_msa,
-            'pair': prev_evoformer_input_pair,
+      if c.template.enabled:
+        template_module = TemplateEmbedding(c.template, gc)
+        template_batch = {
+            'template_aatype': batch['template_aatype'],
+            'template_all_atom_positions': batch['template_all_atom_positions'],
+            'template_all_atom_mask': batch['template_all_atom_mask']
         }
-        evoformer_masks = {
-            'msa': prev_evoformer_masks_msa,
-            'pair': prev_evoformer_masks_pair,
-        }
+        if "template_dgram" in batch:
+          template_batch["template_dgram"] = batch["template_dgram"]
 
-        # print('in evoformer, evoformer_input redone', evoformer_input, 'num_msa_sequences', num_msa_sequences, '2',evoformer_input['msa'].shape[0])
-      else:
-        # print('in embeddings_and_evoformer, rerunning', batch['msa_feat'].shape, batch['target_feat'].shape)
-
-        msa_feat = batch['msa_feat'].astype(dtype)
-        target_feat = jnp.pad(batch["target_feat"].astype(dtype),[[0,0],[0,1]])
-        preprocess_1d = common_modules.Linear(c.msa_channel, name='preprocess_1d')(target_feat)
-        preprocess_msa = common_modules.Linear(c.msa_channel, name='preprocess_msa')(msa_feat)
-        msa_activations = preprocess_1d[None] + preprocess_msa
-        num_msa_sequences = msa_activations.shape[0]
-
-        left_single = common_modules.Linear(c.pair_channel, name='left_single')(target_feat)
-        right_single = common_modules.Linear(c.pair_channel, name='right_single')(target_feat)
-        pair_activations = left_single[:, None] + right_single[None]
-        mask_2d = batch['seq_mask'][:, None] * batch['seq_mask'][None, :]
-        mask_2d = mask_2d.astype(dtype)
-
-        if c.recycle_pos:
-          # print('in evoformer, recycling pos', 'prev_pos' in batch, batch['prev_pos'].shape, batch['aatype'].shape)
-          prev_pseudo_beta = modules.pseudo_beta_fn(batch['aatype'], batch['prev_pos'], None)
-          dgram = modules.dgram_from_positions(prev_pseudo_beta, **self.config.prev_pos)
-          dgram = dgram.astype(dtype)
-          pair_activations += common_modules.Linear(c.pair_channel, name='prev_pos_linear')(dgram)
-
-        if c.recycle_features:
-          prev_msa_first_row = common_modules.LayerNorm(
-              axis=[-1],
-              create_scale=True,
-              create_offset=True,
-              name='prev_msa_first_row_norm')(batch['prev_msa_first_row']).astype(dtype)
-          
-          msa_activations = msa_activations.at[0].add(prev_msa_first_row)
-
-          pair_activations += common_modules.LayerNorm(
-              axis=[-1],
-              create_scale=True,
-              create_offset=True,
-              name='prev_pair_norm')(batch['prev_pair']).astype(dtype)
-
-        if c.max_relative_idx:
-          pair_activations += self._relative_encoding(batch)
-
-        if c.template.enabled:
-          template_module = TemplateEmbedding(c.template, gc)
-          template_batch = {
-              'template_aatype': batch['template_aatype'],
-              'template_all_atom_positions': batch['template_all_atom_positions'],
-              'template_all_atom_mask': batch['template_all_atom_mask']
-          }
-          if "template_dgram" in batch:
-            template_batch["template_dgram"] = batch["template_dgram"]
-
-          # Construct a mask such that only intra-chain template features are
-          # computed, since all templates are for each chain individually.
-          multichain_mask = batch['asym_id'][:, None] == batch['asym_id'][None, :]
-          multichain_mask = jnp.where(batch["mask_template_interchain"], multichain_mask, True)
-
-          safe_key, safe_subkey = safe_key.split()
-          template_act = template_module(
-              query_embedding=pair_activations,
-              template_batch=template_batch,
-              padding_mask_2d=mask_2d,
-              multichain_mask_2d=multichain_mask,
-              use_dropout=batch["use_dropout"],
-              safe_key=safe_subkey)
-          pair_activations += template_act
-
-        # Extra MSA stack.
-        (extra_msa_feat, extra_msa_mask) = create_extra_msa_feature(batch, c.num_extra_msa)
-        extra_msa_activations = common_modules.Linear(c.extra_msa_channel,
-                                                      name='extra_msa_activations')(extra_msa_feat).astype(dtype)
-        extra_msa_mask = extra_msa_mask.astype(dtype)
-        extra_evoformer_input = {'msa': extra_msa_activations, 'pair': pair_activations}
-        extra_masks = {'msa': extra_msa_mask, 'pair': mask_2d}
-        extra_evoformer_iteration = modules.EvoformerIteration(c.evoformer, gc, is_extra_msa=True, name='extra_msa_stack')
-
-        def extra_evoformer_fn(x):
-          act, safe_key = x
-          safe_key, safe_subkey = safe_key.split()
-          extra_evoformer_output = extra_evoformer_iteration(
-              activations=act,
-              masks=extra_masks,
-              use_dropout=batch["use_dropout"],
-              safe_key=safe_subkey)
-          return (extra_evoformer_output, safe_key)
-
-        if gc.use_remat:
-          extra_evoformer_fn = hk.remat(extra_evoformer_fn)
+        # Construct a mask such that only intra-chain template features are
+        # computed, since all templates are for each chain individually.
+        multichain_mask = batch['asym_id'][:, None] == batch['asym_id'][None, :]
+        multichain_mask = jnp.where(batch["mask_template_interchain"], multichain_mask, True)
 
         safe_key, safe_subkey = safe_key.split()
-        extra_evoformer_stack = layer_stack.layer_stack(
-            c.extra_msa_stack_num_block)(
-                extra_evoformer_fn)
-        extra_evoformer_output, safe_key = extra_evoformer_stack(
-            (extra_evoformer_input, safe_subkey))
+        template_act = template_module(
+            query_embedding=pair_activations,
+            template_batch=template_batch,
+            padding_mask_2d=mask_2d,
+            multichain_mask_2d=multichain_mask,
+            use_dropout=batch["use_dropout"],
+            safe_key=safe_subkey)
+        pair_activations += template_act
 
-        pair_activations = extra_evoformer_output['pair']
-        # Get the size of the MSA before potentially adding templates, so we
-        # can crop out the templates later.
-        num_msa_sequences = msa_activations.shape[0]
-        evoformer_input = {
-            'msa': msa_activations,
-            'pair': pair_activations,
-        }
-        evoformer_masks = {'msa': batch['msa_mask'].astype(dtype), 'pair': mask_2d}      
-        if c.template.enabled:
-          template_features, template_masks = (
-              template_embedding_1d(batch=batch, num_channel=c.msa_channel, global_config=gc))
+      # Extra MSA stack.
+      (extra_msa_feat, extra_msa_mask) = create_extra_msa_feature(batch, c.num_extra_msa)
+      extra_msa_activations = common_modules.Linear(c.extra_msa_channel,
+                                                    name='extra_msa_activations')(extra_msa_feat).astype(dtype)
+      extra_msa_mask = extra_msa_mask.astype(dtype)
+      extra_evoformer_input = {'msa': extra_msa_activations, 'pair': pair_activations}
+      extra_masks = {'msa': extra_msa_mask, 'pair': mask_2d}
+      extra_evoformer_iteration = modules.EvoformerIteration(c.evoformer, gc, is_extra_msa=True, name='extra_msa_stack')
 
-          evoformer_input['msa'] = jnp.concatenate([evoformer_input['msa'], template_features], axis=0)
-          evoformer_masks['msa'] = jnp.concatenate([evoformer_masks['msa'], template_masks], axis=0)
-          
-        # with jax.checking_leaks():
-        # if True: #len(batch['opt']['crop']) == 1: #evoformer_input['msa'].shape[1] == batch['seq']['logits'].shape[1]+15:
-        #   print('already cropped evoformer')
-        # print('config contains crop', c.crop)
-        if c.crop:
-          # print('cropping evoformer input')
-          # jax_array_slice = jnp.concatenate([jnp.arange(0,3),jnp.arange(12,24),jnp.arange(37,56),jnp.arange(61,70),jnp.arange(86,123),jnp.arange(124,143),jnp.arange(146,150),jnp.arange(151,154),jnp.arange(165,175),jnp.arange(184,237),jnp.arange(258,270),jnp.arange(289,291),jnp.arange(292,294),jnp.arange(296,298),jnp.arange(312,361),jnp.arange(371,376),jnp.arange(422,442),jnp.arange(454,468),jnp.arange(494,evoformer_input['msa'].shape[1])], axis=0)
-          # # print('cropping evoformer input, jax_array_slice', jax_array_slice.shape)
-          # # # jax_array_slice = jnp.concatenate([jnp.arange(0,3),jnp.arange(12,24),jnp.arange(37,56),jnp.arange(61,70),jnp.arange(86,123),jnp.arange(124,143),jnp.arange(146,150),jnp.arange(151,154),jnp.arange(165,175),jnp.arange(184,237),jnp.arange(258,270),jnp.arange(289,291),jnp.arange(292,294),jnp.arange(296,298),jnp.arange(312,361),jnp.arange(371,376),jnp.arange(422,436),jnp.arange(448,462),jnp.arange(488,evoformer_input['msa'].shape[1])], axis=0)
-          # jax_array_slice = jnp.concatenate([jnp.arange(35,50),jnp.arange(92,111),jnp.arange(115,evoformer_input['msa'].shape[1])], axis=0)
-          crop_indices = c.crop_indices
-          to_concat = []
-          for i in range(0, len(crop_indices) - 1, 2):
-            to_concat.append(jnp.arange(crop_indices[i], crop_indices[i+1]))
-          to_concat.append(jnp.arange(crop_indices[-1], evoformer_input['msa'].shape[1]))
-          jax_array_slice = jnp.concatenate(to_concat, axis=0)
-          for k in evoformer_input:
-            if 'pair' in k:
-              evoformer_input[k] = evoformer_input[k][jax_array_slice[:, np.newaxis], jax_array_slice,:]#[jax_array_slice, jax_array_slice, :]
-            # else:
-            #   evoformer_input[k] = evoformer_input[k][:, jax_array_slice, :]
-          for k in evoformer_masks:
-            if 'pair' in k:
-              evoformer_masks[k] = evoformer_masks[k][jax_array_slice[:, np.newaxis], jax_array_slice]#[jax_array_slice, jax_array_slice, :][jax_array_slice, jax_array_slice]
-            else:
-              evoformer_masks[k] = evoformer_masks[k][:,jax_array_slice]
-          evoformer_input['msa'] = evoformer_input['msa'][:, jax_array_slice, :]
-        # print('in evoformer, rerunning num_msa_sequences', num_msa_sequences)
-        # print('in evoformer, rerunning evoformer_input msa', evoformer_input['msa'].shape)
-        # print('in evoformer, rerunning evoformer_input pair', evoformer_input['pair'].shape)
-        # print('in evoformer, rerunning evoformer_masks msa', evoformer_masks['msa'].shape)
-        # print('in evoformer, rerunning evoformer_masks pair', evoformer_masks['pair'].shape)
-      # print('in evoformer, evoformer_input', evoformer_input)
-      # print('in evoformer, evoformer_masks', evoformer_masks)
-      
+      def extra_evoformer_fn(x):
+        act, safe_key = x
+        safe_key, safe_subkey = safe_key.split()
+        extra_evoformer_output = extra_evoformer_iteration(
+            activations=act,
+            masks=extra_masks,
+            use_dropout=batch["use_dropout"],
+            safe_key=safe_subkey)
+        return (extra_evoformer_output, safe_key)
+
+      if gc.use_remat:
+        extra_evoformer_fn = hk.remat(extra_evoformer_fn)
+
+      safe_key, safe_subkey = safe_key.split()
+      extra_evoformer_stack = layer_stack.layer_stack(
+          c.extra_msa_stack_num_block)(
+              extra_evoformer_fn)
+      extra_evoformer_output, safe_key = extra_evoformer_stack(
+          (extra_evoformer_input, safe_subkey))
+
+      pair_activations = extra_evoformer_output['pair']
+      # Get the size of the MSA before potentially adding templates, so we
+      # can crop out the templates later.
+      num_msa_sequences = msa_activations.shape[0]
+      evoformer_input = {
+          'msa': msa_activations,
+          'pair': pair_activations,
+      }
+      evoformer_masks = {'msa': batch['msa_mask'].astype(dtype), 'pair': mask_2d}      
+      if c.template.enabled:
+        template_features, template_masks = (
+            template_embedding_1d(batch=batch, num_channel=c.msa_channel, global_config=gc))
+
+        evoformer_input['msa'] = jnp.concatenate([evoformer_input['msa'], template_features], axis=0)
+        evoformer_masks['msa'] = jnp.concatenate([evoformer_masks['msa'], template_masks], axis=0)
+        
+      if c.crop:
+        crop_indices = c.crop_indices
+        to_concat = []
+        for i in range(0, len(crop_indices) - 1, 2):
+          to_concat.append(jnp.arange(crop_indices[i], crop_indices[i+1]))
+        to_concat.append(jnp.arange(crop_indices[-1], evoformer_input['msa'].shape[1]))
+        jax_array_slice = jnp.concatenate(to_concat, axis=0)
+        for k in evoformer_input:
+          if 'pair' in k:
+            evoformer_input[k] = evoformer_input[k][jax_array_slice[:, np.newaxis], jax_array_slice,:]
+        for k in evoformer_masks:
+          if 'pair' in k:
+            evoformer_masks[k] = evoformer_masks[k][jax_array_slice[:, np.newaxis], jax_array_slice]
+          else:
+            evoformer_masks[k] = evoformer_masks[k][:,jax_array_slice]
+        evoformer_input['msa'] = evoformer_input['msa'][:, jax_array_slice, :]
+
 
       evoformer_iteration = modules.EvoformerIteration(
           c.evoformer, gc, is_extra_msa=False, name='evoformer_iteration')
@@ -722,8 +581,6 @@ class EmbeddingsAndEvoformer(hk.Module):
 
       msa_activations = evoformer_output['msa']
       pair_activations = evoformer_output['pair']
-      # print('in evoformer, pair_activations after', pair_activations.shape)
-      # print('in evoformer, msa_activations after', msa_activations.shape)
       single_activations = common_modules.Linear(
           c.seq_channel, name='single_activations')(msa_activations[0])
 
@@ -736,23 +593,8 @@ class EmbeddingsAndEvoformer(hk.Module):
         'msa':
             msa_activations[:num_msa_sequences, :, :],
         'msa_first_row':
-            msa_activations[0],
-        # 'evoformer_input_msa':
-        #     evoformer_input['msa'],
-        # 'evoformer_input_pair':
-        #     evoformer_input['pair'],
-        # 'evoformer_masks_msa':
-        #     evoformer_masks['msa'],
-        # 'evoformer_masks_pair':
-        #     evoformer_masks['pair'],
+            msa_activations[0]
     })
-
-    # print('in evoformer, output final single', single_activations.shape)
-    # print('in evoformer, output final pair', pair_activations.shape)
-    # print('in evoformer, output final msa', msa_activations[:num_msa_sequences, :, :].shape, 'nnum_msa_sequences',num_msa_sequences)
-    # print('in evoformer, output final msa_first_row', msa_activations[0].shape)
-
-    # print(stop)
 
     # Convert back to float32 if we're not saving memory.
     if not gc.bfloat16_output:

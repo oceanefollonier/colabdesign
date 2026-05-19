@@ -16,46 +16,19 @@ class _af_inputs:
     params, opt = inputs["params"], inputs["opt"]
     '''get sequence features'''
 
-    
-    # print('in _get_seq, opt', opt['alpha'], opt['soft'], opt['hard'])
-    seq = soft_seq(params["seq"], inputs["bias"], opt, key, num_seq=self._num,
+        seq = soft_seq(params["seq"], inputs["bias"], opt, key, num_seq=self._num,
                    shuffle_first=self._args["shuffle_first"])
     seq = self._fix_pos(seq)
-    # print('[DEBUG _get_seq] params["seq"].shape', params["seq"].shape)
-    # print('[DEBUG _get_seq] seq["pseudo"].shape after soft_seq and fix_pos', seq["pseudo"].shape)
     aux.update({"seq":seq, "seq_pseudo":seq["pseudo"]})
     
     # protocol specific modifications to seq features
-    if self.protocol == "binder": #TO CHECK #or (self.protocol == "partial_binder")
-      # print('in _get_seq, self._target_len', self._target_len)
-      # print('in _get_seq, inputs["bias"]', inputs["bias"].shape)
-      # print('in _get_seq, params["seq"]', params["seq"].shape)
-      # print('in _get_seq, inputs["seq_mask"]', inputs["seq_mask"].shape)
-      # For "partial" protocol: concatenate target and partial region sequence
-      # Note: "partial_binder" protocol already has both target and binder in seq, so skip this
-      # print('[DEBUG _get_seq] In partial protocol')
-      # print('[DEBUG _get_seq] inputs["batch"]["aatype"].shape', inputs["batch"]["aatype"].shape)
-      # print('[DEBUG _get_seq] self._target_len', self._target_len)
-      # if self._cfg.model.embeddings_and_evoformer.crop:#self._target_len == 115:
-      #   seq_len = 34
-      # else:
-      #   seq_len = 115
-      # jax_array_slice = jnp.concatenate([jnp.arange(35,50),jnp.arange(92,111)], axis=0)
+    if self.protocol == "binder":
       if seq_len is None:
         seq_len = self._target_len
-      # print('[DEBUG _get_seq] seq_len', seq_len)
       seq_target = jax.nn.one_hot(inputs["batch"]["aatype"][:seq_len],self._args["alphabet_size"]) #self._target_len #[jax_array_slice]
-      # print('[DEBUG _get_seq] seq_target.shape', seq_target.shape)
       seq_target = jnp.broadcast_to(seq_target,(self._num, *seq_target.shape))
-      # print('[DEBUG _get_seq] seq_target.shape after broadcast', seq_target.shape)
-      # print('[DEBUG _get_seq] About to concatenate seq_target with seq["pseudo"]')
       seq = jax.tree_util.tree_map(lambda x:jnp.concatenate([seq_target,x],1), seq)
-      # print('[DEBUG _get_seq] seq["pseudo"].shape after concatenate', seq["pseudo"].shape)
-    # elif :
-    #   # For "partial_binder" protocol: seq already contains target+binder, no concatenation needed
-    #   print('[DEBUG _get_seq] In partial_binder protocol - seq already has target+binder, skipping concatenation')
-    #   print('[DEBUG _get_seq] seq["pseudo"].shape', seq["pseudo"].shape)
-    # print('in _get_seq, seq', seq["pseudo"])
+
     if self.protocol in ["fixbb","hallucination","partial"] and self._args["copies"] > 1:
       seq = jax.tree_util.tree_map(lambda x:expand_copies(x, self._args["copies"], self._args["block_diag"]), seq)
 
@@ -88,10 +61,6 @@ class _af_inputs:
       L = batch["aatype"].shape[0]
       
       # decide which position to remove sequence and/or sidechains
-      # if not self._cfg.model.embeddings_and_evoformer.crop:
-      #   jax.debug.print('in _update_template, using inputs rm_template {}', inputs["rm_template"])
-      #   jax.debug.print('in _update_template, using inputs rm_template_seq {}', inputs["rm_template_seq"])
-      #   jax.debug.print('in _update_template, using inputs rm_template_sc {}',  inputs["rm_template_sc"])
       rm     = jnp.broadcast_to(inputs.get("rm_template",False),L)
       rm_seq = jnp.where(rm,True,jnp.broadcast_to(inputs.get("rm_template_seq",True),L))
       rm_sc  = jnp.where(rm_seq,True,jnp.broadcast_to(inputs.get("rm_template_sc",True),L))
@@ -101,7 +70,6 @@ class _af_inputs:
 
       if "dgram" in batch:
         # use dgram from batch if provided
-        # print('in _update_template, using batch["dgram"].shape', batch["dgram"].shape)
         template_feats.update({"template_dgram":batch["dgram"]})
         nT,nL = inputs["template_aatype"].shape
         inputs["template_dgram"] = jnp.zeros((nT,nL,nL,39))
@@ -109,7 +77,6 @@ class _af_inputs:
       if "all_atom_positions" in batch:
         # get pseudo-carbon-beta coordinates (carbon-alpha for glycine)
         # aatype = is used to define template's CB coordinates (CA in case of glycine)
-        # print('in _update_template, using batch["all_atom_positions"].shape', batch["all_atom_positions"].shape)
         cb, cb_mask = model.modules.pseudo_beta_fn(
           jnp.where(rm_seq,0,batch["aatype"]),
           batch["all_atom_positions"],
@@ -146,7 +113,6 @@ class _af_inputs:
           else:
             inputs[k] = inputs[k].at[...,5:].set(jnp.where(rm_sc[:,None],0,inputs[k][...,5:]))
             inputs[k] = jnp.where(rm[:,None],0,inputs[k])
-      # print('at end of _update_template, template_feats["template_all_atom_positions"].shape', template_feats["template_all_atom_positions"].shape)
 
 def update_seq(seq, inputs, seq_1hot=None, seq_pssm=None, mlm=None):
   '''update the sequence features'''
@@ -154,13 +120,9 @@ def update_seq(seq, inputs, seq_1hot=None, seq_pssm=None, mlm=None):
   if seq_1hot is None: seq_1hot = seq 
   if seq_pssm is None: seq_pssm = seq
   target_feat = seq_1hot[0,:,:20]
-  # print('[DEBUG update_seq] seq.shape', seq.shape)
-  # print('[DEBUG update_seq] seq_1hot.shape', seq_1hot.shape)
 
   seq_1hot = jnp.pad(seq_1hot,[[0,0],[0,0],[0,22-seq_1hot.shape[-1]]])
   seq_pssm = jnp.pad(seq_pssm,[[0,0],[0,0],[0,22-seq_pssm.shape[-1]]])
-  # print('[DEBUG update_seq] inputs["msa_feat"].shape', inputs['msa_feat'].shape)
-  # print('[DEBUG update_seq] seq_1hot.shape after pad', seq_1hot.shape, 'seq_pssm.shape after pad', seq_pssm.shape)
   msa_feat = jnp.zeros_like(inputs["msa_feat"]).at[...,0:22].set(seq_1hot).at[...,25:47].set(seq_pssm)
 
   # masked language modeling (randomly mask positions)
